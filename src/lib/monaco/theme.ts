@@ -1,0 +1,51 @@
+import type * as Monaco from 'monaco-editor'
+
+// Tema oscuro de Aether basado en la paleta definida en index.css (@theme)
+export function defineAetherTheme(monaco: typeof Monaco): void {
+  monaco.editor.defineTheme('aether-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '6b7089', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'bb9af7' },
+      { token: 'string', foreground: '9ece6a' },
+      { token: 'number', foreground: 'ff9e64' },
+      { token: 'regexp', foreground: 'b4f9f8' },
+      { token: 'type', foreground: '2ac3de' },
+      { token: 'type.identifier', foreground: '2ac3de' },
+      { token: 'function', foreground: '7aa2f7' },
+      { token: 'variable', foreground: 'd4d4d8' },
+      { token: 'operator', foreground: '89ddff' },
+      { token: 'tag', foreground: 'bb9af7' },
+      { token: 'attribute.name', foreground: '7aa2f7' },
+      { token: 'attribute.value', foreground: '9ece6a' },
+      { token: 'delimiter', foreground: '89ddff' },
+    ],
+    colors: {
+      'editor.background': '#1e1f26',
+      'editor.foreground': '#d4d4d8',
+      'editorLineNumber.foreground': '#565a68',
+      'editorLineNumber.activeForeground': '#8b8d98',
+      'editorCursor.foreground': '#aa3bff',
+      'editor.selectionBackground': '#aa3bff44',
+      'editor.inactiveSelectionBackground': '#aa3bff22',
+      'editor.lineHighlightBackground': '#26272f66',
+      'editorIndentGuide.background1': '#33353f',
+      'editorIndentGuide.activeBackground1': '#4a4d58',
+      'editorWidget.background': '#26272f',
+      'editorWidget.border': '#33353f',
+      'editorSuggestWidget.background': '#26272f',
+      'editorSuggestWidget.border': '#33353f',
+      'editorSuggestWidget.selectedBackground': '#aa3bff33',
+      'editorHoverWidget.background': '#26272f',
+      'editorHoverWidget.border': '#33353f',
+      'editorBracketMatch.background': '#aa3bff33',
+      'editorBracketMatch.border': '#aa3bff88',
+      'editorGutter.background': '#1e1f26',
+      'scrollbarSlider.background': '#33353faa',
+      'scrollbarSlider.hoverBackground': '#3f424daa',
+      'scrollbarSlider.activeBackground': '#4a4d58aa',
+      'editorOverviewRuler.border': '#00000000',
+    },
+  })
+}

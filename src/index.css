@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-aether-bg: #1e1f26;
+  --color-aether-surface: #26272f;
+  --color-aether-border: #33353f;
+  --color-aether-text: #d4d4d8;
+  --color-aether-text-dim: #8b8d98;
+  --color-aether-accent: #aa3bff;
+
+  --font-sans: 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', ui-monospace, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-aether-bg);
+  color: var(--color-aether-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+/* Gutter diff de Git en Monaco (Fase 4.3) */
+.git-gutter-added {
+  background: #2ea043;
+  width: 4px !important;
+  margin-left: 3px;
+  border-radius: 2px;
+}
+
+.git-gutter-modified {
+  background: #e2c08d;
+  width: 4px !important;
+  margin-left: 3px;
+  border-radius: 2px;
+}
