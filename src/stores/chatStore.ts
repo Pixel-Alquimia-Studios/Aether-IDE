@@ -4,6 +4,7 @@ import { chatStream } from '@/lib/ai/api'
 import { buildContextBlock, getActiveEditorContext, resolveMentions } from '@/lib/ai/context'
 import { deleteChat as deleteChatApi, listChats, loadChat as loadChatApi, saveChat as saveChatApi } from '@/lib/ai/chats'
 import { getActiveProviderConfig } from '@/stores/settingsStore'
+import { useAgentStore } from '@/stores/agentStore'
 import type { ChatMessage, ChatSummary, MentionContext, ThinkingLevel } from '@/types/chat'
 
 interface ChatState {
@@ -21,7 +22,12 @@ interface ChatState {
   setThinkingLevel: (level: ThinkingLevel) => void
   refreshHistory: () => Promise<void>
   newChat: () => Promise<void>
+  /** Persiste el chat activo (mensajes + pasos del agente) sin cambiar la sesión */
+  persistActive: () => Promise<void>
+  /** Modo agente: crea la sesión si no existe (título desde la orden) y registra la tarea */
+  ensureAgentChat: (task: string, turnId: string) => void
   sendMessage: (text: string, mentions?: MentionContext[], options?: { includeAutoContext?: boolean }) => Promise<void>
+  applyRollback: (turnIds: Set<string>) => void
   resumeChat: (id: string) => Promise<void>
   renameChat: (id: string, title: string) => Promise<void>
   deleteChat: (id: string) => Promise<void>
@@ -41,6 +47,8 @@ function titleFrom(text: string): string {
 async function persist(get: () => ChatState): Promise<void> {
   const { chatId, chatTitle, chatCreatedAt, messages } = get()
   if (!chatId || messages.length === 0) return
+  // Los pasos del agente del chat activo se guardan con la conversación
+  const agentSteps = useAgentStore.getState().steps
   await saveChatApi({
     id: chatId,
     title: chatTitle ?? 'Chat sin título',
@@ -48,7 +56,14 @@ async function persist(get: () => ChatState): Promise<void> {
     updatedAt: Date.now(),
     messages: messages
       .filter((m) => m.content.trim() !== '')
-      .map((m) => ({ role: m.role, content: m.content })),
+      // turnId se persiste: sin él el Time Travel deja de funcionar tras
+      // reanudar el chat (el rollback no encuentra los turnos)
+      .map((m) => ({
+        role: m.role,
+        content: m.content,
+        ...(m.turnId ? { turnId: m.turnId } : {}),
+      })),
+    agentSteps: agentSteps.length > 0 ? agentSteps : undefined,
   })
 }
 
@@ -65,6 +80,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   setThinkingLevel: (level) => set({ thinkingLevel: level }),
 
+  // Time Travel: trunca el chat desde el primer mensaje cuyo turno fue
+  // revertido (los archivos los restaura rollback.ts vía los checkpoints)
+  applyRollback: (turnIds) => {
+    const messages = get().messages
+    const firstIdx = messages.findIndex(
+      (m) => m.role === 'user' && m.turnId && turnIds.has(m.turnId),
+    )
+    if (firstIdx === -1) return
+    set({ messages: messages.slice(0, firstIdx) })
+  },
+
   refreshHistory: async () => {
     try {
       set({ history: await listChats() })
@@ -75,9 +101,29 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   newChat: async () => {
     if (get().streaming) return
+    // Guarda la sesión actual (NO se borra) y limpia el panel para empezar
     await persist(get)
     set({ chatId: null, chatTitle: null, chatCreatedAt: null, messages: [], statusText: null, error: null })
+    useAgentStore.getState().reset()
     await get().refreshHistory()
+  },
+
+  persistActive: async () => {
+    await persist(get)
+  },
+
+  // Modo agente: crea la sesión de chat si no existe (con título basado en la
+  // orden) y registra la tarea como mensaje — así el chat del agente queda
+  // en el historial y se persiste como cualquier conversación.
+  ensureAgentChat: (task, turnId) => {
+    if (!get().chatId) {
+      set({ chatId: makeId(), chatTitle: titleFrom(task), chatCreatedAt: Date.now() })
+    }
+    set((state) => ({
+      messages: [...state.messages, { role: 'user', content: task, turnId }],
+    }))
+    // Persist + refresh: el chat del agente aparece en el historial al instante
+    void persist(get).then(() => get().refreshHistory())
   },
 
   sendMessage: async (text, mentions = [], options) => {
@@ -115,16 +161,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       { role: 'user', content: userPayload },
     ]
 
+    // Turno asociado a este mensaje (para Time Travel / rollback)
+    const turnId = `turn-${Date.now()}-${Math.random().toString(16).slice(2)}`
+
     set((state) => ({
       messages: [
         ...state.messages,
-        { role: 'user', content: trimmed },
+        { role: 'user', content: trimmed, turnId },
         { role: 'assistant', content: '' },
       ],
       streaming: true,
       statusText: null,
       error: null,
     }))
+
+    // Persist inmediato: el mensaje del usuario sobrevive a un reload de HMR
+    void persist(get)
 
     let thinkingStartedAt: number | null = null
 
@@ -192,10 +244,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       chatCreatedAt: session.createdAt,
       messages: session.messages
         .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim() !== '')
-        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        .map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          ...(m.turnId ? { turnId: m.turnId } : {}),
+        })),
       statusText: null,
       error: null,
     })
+    // Restaurar también los pasos del agente guardados con la sesión
+    useAgentStore.getState().setSteps(session.agentSteps ?? [])
   },
 
   renameChat: async (id, title) => {

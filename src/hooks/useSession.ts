@@ -2,6 +2,9 @@ import { isTauri } from '@tauri-apps/api/core'
 import { useEffect } from 'react'
 
 import { loadSession, readDir, saveSession, watchWorkspace } from '@/lib/workspace/fs'
+import { loadChat } from '@/lib/ai/chats'
+import { useAgentStore } from '@/stores/agentStore'
+import { useChatStore } from '@/stores/chatStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useSettingsStore, getActiveProviderConfig } from '@/stores/settingsStore'
 import { useUiStore, type SidebarView } from '@/stores/uiStore'
@@ -15,7 +18,9 @@ function buildSession(): SessionData {
   const activeConfig = getActiveProviderConfig()
   return {
     rootPath: ws.rootPath,
-    openTabs: editor.tabs.map((t) => t.id),
+    // Las pestañas untitled no se persisten: no existe archivo detrás y su
+    // restauración falla (openFile de un id relativo inexistente)
+    openTabs: editor.tabs.filter((t) => !t.id.startsWith('untitled-')).map((t) => t.id),
     activeTab: editor.activeTabId,
     expandedDirs: [...ws.expandedDirs],
     activeView: ui.activeView,
@@ -23,6 +28,8 @@ function buildSession(): SessionData {
     selectedProvider: activeConfig?.providerId ?? null,
     selectedModel: activeConfig?.model ?? null,
     fetchedModels: useSettingsStore.getState().fetchedModels,
+    activeChatId: useChatStore.getState().chatId,
+    autoSave: ui.autoSave,
   }
 }
 
@@ -56,6 +63,35 @@ export function useSession(): void {
       }
       // Al iniciar: cargar catálogo y auto-fetch de modelos en segundo plano
       void useSettingsStore.getState().loadProviders()
+
+      // Restaurar Auto Save y el CHAT ACTIVO (mensajes + pasos del agente):
+      // los reloads de HMR ya no pierden el chat en curso
+      if (session.autoSave) {
+        useUiStore.setState({ autoSave: true })
+      }
+      if (session.activeChatId) {
+        const activeChat = await loadChat(session.activeChatId)
+        if (activeChat && !cancelled) {
+          useChatStore.setState({
+            chatId: activeChat.id,
+            chatTitle: activeChat.title,
+            chatCreatedAt: activeChat.createdAt,
+            messages: activeChat.messages
+              .filter(
+                (m) =>
+                  (m.role === 'user' || m.role === 'assistant') &&
+                  m.content.trim() !== '',
+              )
+              .map((m) => ({
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                ...(m.turnId ? { turnId: m.turnId } : {}),
+              })),
+          })
+          useAgentStore.getState().setSteps(activeChat.agentSteps ?? [])
+        }
+      }
+
       if (!session.rootPath) return
       try {
         const fileTree = await readDir(session.rootPath)
@@ -89,16 +125,28 @@ export function useSession(): void {
         void saveSession(buildSession())
       }, 800)
     }
+    // Persistencia del chat activo (mensajes + pasos del agente) con debounce:
+    // se guardan en chats/*.json, no en session.json
+    let chatTimer: number | undefined
+    const scheduleChatPersist = (): void => {
+      window.clearTimeout(chatTimer)
+      chatTimer = window.setTimeout(() => {
+        void useChatStore.getState().persistActive()
+      }, 1200)
+    }
     const unsubs = [
       useEditorStore.subscribe(schedule),
       useUiStore.subscribe(schedule),
       useWorkspaceStore.subscribe(schedule),
       useSettingsStore.subscribe(schedule),
+      useChatStore.subscribe(scheduleChatPersist),
+      useAgentStore.subscribe(scheduleChatPersist),
     ]
 
     return () => {
       cancelled = true
       window.clearTimeout(timer)
+      window.clearTimeout(chatTimer)
       for (const unsub of unsubs) unsub()
     }
   }, [])

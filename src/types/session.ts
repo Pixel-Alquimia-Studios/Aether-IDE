@@ -10,4 +10,7 @@ export interface SessionData {
   selectedProvider: string | null
   selectedModel: string | null
   fetchedModels: Record<string, ModelInfo[]>
+  /** Chat activo: se restaura al iniciar (sobrevive reloads de HMR) */
+  activeChatId: string | null
+  autoSave: boolean
 }

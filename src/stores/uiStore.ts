@@ -9,6 +9,10 @@ interface UiState {
   paletteOpen: boolean
   /** Widget "Edit with prompt" (Ctrl+I) sobre el editor */
   inlineEditOpen: boolean
+  /** Auto-guardado al editar (menú Archivo) */
+  autoSave: boolean
+  /** Menú desplegable abierto (null = cerrado) */
+  openMenu: string | null
 
   setActiveView: (view: SidebarView) => void
   showView: (view: SidebarView) => void
@@ -16,6 +20,8 @@ interface UiState {
   togglePanel: () => void
   setPaletteOpen: (open: boolean) => void
   setInlineEditOpen: (open: boolean) => void
+  toggleAutoSave: () => void
+  setOpenMenu: (menu: string | null) => void
 }
 
 export const useUiStore = create<UiState>()((set) => ({
@@ -24,6 +30,8 @@ export const useUiStore = create<UiState>()((set) => ({
   panelVisible: false,
   paletteOpen: false,
   inlineEditOpen: false,
+  autoSave: false,
+  openMenu: null,
 
   // Si se pulsa el icono de la vista ya activa, colapsa la sidebar (comportamiento VS Code)
   setActiveView: (view) =>
@@ -38,4 +46,6 @@ export const useUiStore = create<UiState>()((set) => ({
   togglePanel: () => set((state) => ({ panelVisible: !state.panelVisible })),
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   setInlineEditOpen: (open) => set({ inlineEditOpen: open }),
+  toggleAutoSave: () => set((state) => ({ autoSave: !state.autoSave })),
+  setOpenMenu: (menu) => set({ openMenu: menu }),
 }))

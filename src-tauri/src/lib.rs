@@ -10,6 +10,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
+            commands::file_exists,
             commands::write_file,
             commands::read_dir,
             commands::pick_workspace_dir,
@@ -25,6 +26,10 @@ pub fn run() {
             commands::git_commit,
             commands::git_push,
             commands::git_pull,
+            commands::delete_file,
+            commands::pick_open_file,
+            commands::pick_save_file,
+            commands::exit_app,
             commands_ai::list_providers,
             commands_ai::has_api_key,
             commands_ai::set_api_key,

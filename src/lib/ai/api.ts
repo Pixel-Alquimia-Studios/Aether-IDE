@@ -1,4 +1,5 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
+import type { InvokeArgs } from '@tauri-apps/api/core'
 
 import type { ModelInfo, ProviderInfo, ToolDef, ToolResponse } from '@/types/ai'
 import type { ThinkingLevel } from '@/types/chat'
@@ -7,6 +8,28 @@ import type { ThinkingLevel } from '@/types/chat'
 // (más eficiente que eventos para tokens). Las API keys nunca viajan al frontend.
 
 export type { ModelInfo, ProviderInfo, ToolDef, ToolResponse }
+
+// Invoca con reintentos: el protocolo IPC HTTP de Tauri puede tardar en
+// inicializarse tras un reload (HMR/refresh); los invoke en vuelo fallan con
+// "Failed to fetch". Se reintenta hasta 3 veces separadas por 500 ms para
+// esperar la inicialización del protocolo antes de lanzar un error fatal.
+async function invokeWithRetry<T>(cmd: string, args?: InvokeArgs, retries = 3): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await invoke<T>(cmd, args)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      const isIpcInitError =
+        msg.includes('Failed to fetch') || msg.includes('Failed to execute')
+      if (attempt < retries && isIpcInitError) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        continue
+      }
+      throw e
+    }
+  }
+  throw new Error(`invokeWithRetry agotó los reintentos: ${cmd}`)
+}
 
 export interface StreamChunk {
   type: 'delta' | 'thinking' | 'status' | 'metrics' | 'done' | 'error'
@@ -28,7 +51,7 @@ export interface StreamHandlers {
 
 export async function listProviders(): Promise<ProviderInfo[]> {
   if (isTauri()) {
-    return invoke<ProviderInfo[]>('list_providers')
+    return invokeWithRetry<ProviderInfo[]>('list_providers')
   }
   const { MOCK_PROVIDERS } = await import('./mockProviders')
   return MOCK_PROVIDERS
@@ -36,26 +59,26 @@ export async function listProviders(): Promise<ProviderInfo[]> {
 
 export async function hasApiKey(providerId: string): Promise<boolean> {
   if (isTauri()) {
-    return invoke<boolean>('has_api_key', { providerId })
+    return invokeWithRetry<boolean>('has_api_key', { providerId })
   }
   return false
 }
 
 export async function saveApiKey(providerId: string, apiKey: string): Promise<void> {
   if (isTauri()) {
-    await invoke('set_api_key', { providerId, apiKey })
+    await invokeWithRetry<void>('set_api_key', { providerId, apiKey })
   }
 }
 
 export async function deleteApiKey(providerId: string): Promise<void> {
   if (isTauri()) {
-    await invoke('delete_api_key', { providerId })
+    await invokeWithRetry<void>('delete_api_key', { providerId })
   }
 }
 
 export async function fetchModels(providerId: string): Promise<ModelInfo[]> {
   if (isTauri()) {
-    return invoke<ModelInfo[]>('fetch_models', { providerId })
+    return invokeWithRetry<ModelInfo[]>('fetch_models', { providerId })
   }
   const { MOCK_PROVIDERS } = await import('./mockProviders')
   const provider = MOCK_PROVIDERS.find((p) => p.id === providerId)
@@ -107,7 +130,7 @@ export async function inlineCompletion(params: {
 }): Promise<string | null> {
   if (!isTauri()) return null
   try {
-    return await invoke<string | null>('inline_completion', {
+    return await invokeWithRetry<string | null>('inline_completion', {
       providerId: params.providerId,
       model: params.model,
       request: {
@@ -133,7 +156,7 @@ export async function chatWithTools(params: {
   if (!isTauri()) {
     throw new Error('El modo agente requiere la app de escritorio (Tauri)')
   }
-  return invoke<ToolResponse>('chat_with_tools', {
+  return invokeWithRetry<ToolResponse>('chat_with_tools', {
     providerId: params.providerId,
     model: params.model,
     messages: params.messages,

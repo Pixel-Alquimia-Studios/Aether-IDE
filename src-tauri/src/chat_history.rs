@@ -10,6 +10,10 @@ use tauri::Manager;
 pub struct StoredMessage {
     pub role: String,
     pub content: String,
+    /// Turno al que pertenece el mensaje (Time Travel / rollback). Opcional:
+    /// los chats guardados antes de persistirlo se cargan igual (serde default)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +24,9 @@ pub struct ChatSession {
     pub created_at: u64,
     pub updated_at: u64,
     pub messages: Vec<StoredMessage>,
+    /// Pasos del agente persistidos (transparentes para Rust: se guardan tal cual)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_steps: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize)]

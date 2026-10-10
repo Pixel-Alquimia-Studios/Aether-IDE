@@ -1,3 +1,5 @@
+import type { AgentStep } from '@/types/agent'
+
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'max'
 
 /** Contexto adjuntado a un mensaje vía menciones @ */
@@ -9,20 +11,11 @@ export interface MentionContext {
   path?: string
 }
 
-export interface ChatMessage {
-  role: 'user' | 'assistant'
-  content: string
-  /** Razonamiento acumulado (Chain of Thought) del modelo */
-  thinking?: string
-  /** Duración del razonamiento (hasta el primer contenido) */
-  thinkingDurationMs?: number
-  /** Métricas de la respuesta (tiempo medido en Rust + tokens aproximados) */
-  metrics?: { elapsedMs: number; tokens: number }
-}
-
 export interface StoredChatMessage {
   role: string
   content: string
+  /** Identificador de turno (para Agent Time Travel / rollback); persistido */
+  turnId?: string
 }
 
 export interface ChatSummary {
@@ -38,4 +31,19 @@ export interface ChatSession {
   createdAt: number
   updatedAt: number
   messages: StoredChatMessage[]
+  /** Pasos del agente asociados a la conversación (persistidos con la sesión) */
+  agentSteps?: AgentStep[]
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  /** Identificador de turno (para Agent Time Travel / rollback) */
+  turnId?: string
+  /** Razonamiento acumulado (Chain of Thought) del modelo */
+  thinking?: string
+  /** Duración del razonamiento (hasta el primer contenido) */
+  thinkingDurationMs?: number
+  /** Métricas de la respuesta (tiempo medido en Rust + tokens aproximados) */
+  metrics?: { elapsedMs: number; tokens: number }
 }

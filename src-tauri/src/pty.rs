@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
@@ -10,6 +11,53 @@ use tauri::{AppHandle, Emitter};
 
 // Terminal integrada (Fase 4.4): PTY nativo con portable-pty (ConPTY en Windows).
 // Output → evento Tauri 'terminal-output'; input → comando terminal_write.
+
+/// Shell por defecto según el sistema operativo:
+/// Windows: PowerShell 7 > Windows PowerShell > cmd.exe
+/// macOS: $SHELL > /bin/zsh > /bin/bash
+/// Linux: $SHELL > /bin/bash > /bin/sh
+fn detect_shell() -> CommandBuilder {
+    #[cfg(target_os = "windows")]
+    {
+        let pwsh_candidates = [
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"C:\Program Files\PowerShell\6\pwsh.exe",
+        ];
+        for candidate in pwsh_candidates {
+            if Path::new(candidate).exists() {
+                return CommandBuilder::new(candidate);
+            }
+        }
+        if Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe").exists() {
+            return CommandBuilder::new("powershell.exe");
+        }
+        CommandBuilder::new("cmd.exe")
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(shell) = std::env::var("SHELL") {
+            if !shell.trim().is_empty() {
+                return CommandBuilder::new(shell);
+            }
+        }
+        if Path::new("/bin/zsh").exists() {
+            return CommandBuilder::new("/bin/zsh");
+        }
+        CommandBuilder::new("/bin/bash")
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Ok(shell) = std::env::var("SHELL") {
+            if !shell.trim().is_empty() {
+                return CommandBuilder::new(shell);
+            }
+        }
+        if Path::new("/bin/bash").exists() {
+            return CommandBuilder::new("/bin/bash");
+        }
+        CommandBuilder::new("/bin/sh")
+    }
+}
 
 struct PtySession {
     writer: Box<dyn Write + Send>,
@@ -43,12 +91,7 @@ pub fn terminal_spawn(
         })
         .map_err(|e| format!("No se pudo abrir el PTY: {e}"))?;
 
-    #[cfg(target_os = "windows")]
-    let mut shell = CommandBuilder::new("powershell.exe");
-    #[cfg(target_os = "macos")]
-    let mut shell = CommandBuilder::new("zsh");
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let mut shell = CommandBuilder::new("bash");
+    let mut shell = detect_shell();
 
     shell.cwd(&cwd);
     let child = pair

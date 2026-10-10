@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Workspaces de prueba que se abren con Aether IDE (no son parte del código)
+Aether-tests/
+Aether-workspace/
+aether-workspace/

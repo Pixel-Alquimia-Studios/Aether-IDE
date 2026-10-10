@@ -16,7 +16,8 @@ export default defineConfig({
   },
 
   // Opciones para desarrollo con Tauri: sin clear-screen, puerto fijo y HMR,
-  // ignorando src-tauri en el watcher para no recargar por cambios de Rust.
+  // ignorando src-tauri y los workspaces que el usuario abre con la app
+  // (evita full page reloads al guardar/editar archivos desde Aether IDE).
   clearScreen: false,
   server: {
     port: 1420,
@@ -24,7 +25,13 @@ export default defineConfig({
     host: host || false,
     hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
     watch: {
-      ignored: ['**/src-tauri/**'],
+      ignored: [
+        '**/src-tauri/**',
+        '**/dist/**',
+        '**/Aether-tests/**',
+        '**/Aether-workspace/**',
+        '**/aether-workspace/**',
+      ],
     },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],

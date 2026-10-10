@@ -4,6 +4,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { AgentView } from '@/components/ai/AgentView'
 import { MarkdownRenderer } from '@/components/ai/MarkdownRenderer'
 import { ThinkingBlock } from '@/components/ai/ThinkingBlock'
+import { collectTurnIdsFrom, rollbackTurns } from '@/lib/agent/rollback'
 import { fuzzyScore } from '@/lib/commands/fuzzy'
 import { useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
@@ -214,6 +215,21 @@ export function ChatPanel() {
     }
   }
 
+  // Agent Time Travel: trunca el chat desde el mensaje i y revierte los
+  // cambios de archivos que el agente aplicó desde ese punto
+  const truncateFrom = (index: number): void => {
+    if (streaming || agentRunning) return
+    const turnIds = collectTurnIdsFrom(index)
+    void rollbackTurns(turnIds)
+  }
+
+  const editMessage = (index: number): void => {
+    const msg = messages[index]
+    if (!msg || msg.role !== 'user' || streaming || agentRunning) return
+    setInput(msg.content)
+    truncateFrom(index)
+  }
+
   const commitRename = (): void => {
     if (chatId && renameValue.trim()) {
       void renameChat(chatId, renameValue)
@@ -373,7 +389,7 @@ export function ChatPanel() {
 
       {/* Área de mensajes (chat) o pasos del agente */}
       {agentMode === 'agent' ? (
-        <AgentView />
+        <AgentView onEditTask={(text) => setInput(text)} />
       ) : (
         <div className="flex-1 space-y-3 overflow-y-auto p-3">
           {messages.length === 0 && (
@@ -386,7 +402,10 @@ export function ChatPanel() {
             </div>
           )}
         {messages.map((msg, i) => (
-          <div key={i} className={msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+          <div
+            key={i}
+            className={`group relative flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
             <div
               className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] ${
                 msg.role === 'user'
@@ -416,6 +435,26 @@ export function ChatPanel() {
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               )}
             </div>
+
+            {/* Time Travel: editar / eliminar mensajes del usuario */}
+            {msg.role === 'user' && !streaming && !agentRunning && (
+              <div className="absolute top-1 right-1 hidden items-center gap-0.5 rounded bg-aether-surface/90 p-0.5 shadow group-hover:flex">
+                <button
+                  title="Editar y reenviar (revierte los cambios posteriores)"
+                  onClick={() => editMessage(i)}
+                  className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                >
+                  ✏️
+                </button>
+                <button
+                  title="Eliminar (revierte los cambios del agente desde aquí)"
+                  onClick={() => truncateFrom(i)}
+                  className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                >
+                  🗑
+                </button>
+              </div>
+            )}
           </div>
         ))}
         {statusText && (

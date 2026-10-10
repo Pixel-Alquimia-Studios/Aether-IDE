@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useAgentStore } from '@/stores/agentStore'
 import type { ToolCall, ToolDef } from '@/types/ai'
 
-const MAX_OUTPUT_CHARS = 4000
+const MAX_OUTPUT_CHARS = 2000
 
 // --- Permisos (regla esencial) ---
 // Herramientas de SOLO LECTURA: disponibles para analizar código.
@@ -60,7 +60,7 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     name: 'execute_command',
     description:
-      'Ejecuta un comando en la terminal del proyecto (cmd en Windows, sh en Unix) y devuelve exit code, stdout y stderr. REQUIERE confirmación del usuario. Parámetros: {"command": "comando a ejecutar"}',
+      'Ejecuta un comando en la terminal del proyecto y devuelve exit code, stdout y stderr. En Windows se ejecuta con PowerShell (usa cmdlets: "Get-Content", "Get-ChildItem"; las rutas con espacios SIEMPRE entre comillas dobles); en Unix, con sh. El comando se ejecuta con el workspace como directorio actual (no necesitas "cd"). REQUIERE confirmación del usuario. Parámetros: {"command": "comando a ejecutar"}',
     parameters: {
       type: 'object',
       properties: { command: { type: 'string', description: 'Comando a ejecutar' } },
@@ -96,7 +96,11 @@ export function resolveApproval(approved: boolean): void {
   resolver?.(approved)
 }
 
-export async function runTool(call: ToolCall, workspaceRoot: string): Promise<string> {
+export async function runTool(
+  call: ToolCall,
+  workspaceRoot: string,
+  turnId: string,
+): Promise<string> {
   const args = (call.arguments ?? {}) as Record<string, unknown>
 
   // Guard de permisos: whitelist estricta + solo el Modo Agente en ejecución
@@ -143,6 +147,24 @@ export async function runTool(call: ToolCall, workspaceRoot: string): Promise<st
         const path = resolvePath(String(args.path ?? ''), workspaceRoot)
         const approved = await requestApproval(`Escribir archivo: ${path}`)
         if (!approved) return 'DENEGADO: el usuario no aprobó escribir este archivo.'
+        // Checkpoint Time Travel: snapshot del contenido previo antes de
+        // escribir. Un fallo de lectura NO significa que el archivo no exista
+        // (binario sin UTF-8, permisos): la existencia se comprueba aparte.
+        let previousContent: string | null = null
+        const existed = await invoke<boolean>('file_exists', { path })
+        if (existed) {
+          try {
+            previousContent = await invoke<string>('read_file', { path })
+          } catch {
+            return `ERROR: no se pudo hacer el snapshot previo de '${path}' (¿binario o sin permisos de lectura?). Escritura cancelada: sin snapshot el rollback (Time Travel) podría borrar un archivo existente.`
+          }
+        }
+        useAgentStore.getState().addCheckpoint({
+          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          turnId,
+          path,
+          previousContent,
+        })
         await invoke('write_file', { path, content: String(args.content ?? '') })
         return `Archivo escrito correctamente: ${path}`
       }

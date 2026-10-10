@@ -8,6 +8,7 @@ import { StatusBar } from '@/components/layout/StatusBar'
 import { ChatPanel } from '@/components/ai/ChatPanel'
 import { SettingsView } from '@/components/settings/SettingsView'
 import { TerminalView } from '@/components/terminal/TerminalView'
+import { MenuBar } from '@/components/layout/MenuBar'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
@@ -47,6 +48,7 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
+      <MenuBar />
       <div className="flex min-h-0 flex-1">
         <ActivityBar />
         {sidebarVisible && (activeView === 'ai' ? <ChatPanel /> : <Sidebar />)}

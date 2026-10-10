@@ -1,10 +1,24 @@
 import { create } from 'zustand'
 
 import { getLanguageFromPath } from '@/lib/workspace/language'
-import { writeFile as fsWriteFile } from '@/lib/workspace/fs'
+import { pickSaveFile, writeFile as fsWriteFile } from '@/lib/workspace/fs'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { getEditorInstance } from '@/lib/monaco/editorRef'
+import { useUiStore } from '@/stores/uiStore'
 import type { EditorTab } from '@/types/editor'
+
+// Temporizadores del auto-guardado (menú Archivo → Auto Save), uno por
+// pestaña: un debounce global único cancelaba el guardado pendiente de una
+// pestaña cuando se editaba otra dentro del intervalo
+const autoSaveTimers = new Map<string, number>()
+
+function cancelAutoSaveTimer(id: string): void {
+  const timer = autoSaveTimers.get(id)
+  if (timer !== undefined) {
+    window.clearTimeout(timer)
+    autoSaveTimers.delete(id)
+  }
+}
 
 interface EditorState {
   tabs: EditorTab[]
@@ -12,13 +26,17 @@ interface EditorState {
   error: string | null
 
   openFile: (path: string) => Promise<void>
+  openUntitledFile: () => Promise<void>
   closeTab: (id: string) => void
   closeAllTabs: () => void
   setActiveTab: (id: string) => void
   updateContent: (id: string, content: string) => void
   saveTab: (id: string) => Promise<void>
-  reloadExternally: (path: string) => Promise<void>
+  saveTabAs: (id: string, newPath: string) => Promise<void>
+  reloadExternally: (path: string, force?: boolean) => Promise<void>
   insertAtCursor: (text: string) => void
+  /** Cancela un auto-guardado pendiente de una pestaña (p. ej. antes de un rollback) */
+  cancelAutoSave: (id: string) => void
 }
 
 export const useEditorStore = create<EditorState>()((set, get) => ({
@@ -49,7 +67,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     }
   },
 
-  closeTab: (id) =>
+  closeTab: (id) => {
+    cancelAutoSaveTimer(id)
     set((state) => {
       const idx = state.tabs.findIndex((t) => t.id === id)
       const tabs = state.tabs.filter((t) => t.id !== id)
@@ -58,22 +77,94 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         activeTabId = tabs[Math.min(idx, tabs.length - 1)]?.id ?? null
       }
       return { tabs, activeTabId }
-    }),
+    })
+  },
 
-  closeAllTabs: () => set({ tabs: [], activeTabId: null }),
+  closeAllTabs: () => {
+    for (const timer of autoSaveTimers.values()) window.clearTimeout(timer)
+    autoSaveTimers.clear()
+    set({ tabs: [], activeTabId: null })
+  },
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
-  updateContent: (id, content) =>
+  updateContent: (id, content) => {
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, content, isDirty: true } : t)),
-    })),
+    }))
+    // Auto Save: debounce de 1 s tras la última edición, por pestaña. Las
+    // pestañas sin título no tienen ruta en disco: exigen Save As manual
+    // (escribir su id relativo lanzaba "Directorio padre inexistente")
+    if (!useUiStore.getState().autoSave || id.startsWith('untitled-')) return
+    cancelAutoSaveTimer(id)
+    autoSaveTimers.set(
+      id,
+      window.setTimeout(() => {
+        autoSaveTimers.delete(id)
+        void get().saveTab(id)
+      }, 1000),
+    )
+  },
+
+  // Menú Archivo → New File: pestaña sin guardar con nombre autoincremental
+  openUntitledFile: async () => {
+    const existing = get().tabs.map((t) => t.id)
+    let n = 1
+    let path = `untitled-${n}.ts`
+    while (existing.includes(path)) {
+      n += 1
+      path = `untitled-${n}.ts`
+    }
+    const tab: EditorTab = {
+      id: path,
+      title: path,
+      content: '',
+      language: getLanguageFromPath(path),
+      isDirty: true,
+    }
+    set({ tabs: [...get().tabs, tab], activeTabId: tab.id, error: null })
+  },
+
+  // Menú Archivo → Save As: escribe en la nueva ruta y reemplaza la pestaña
+  saveTabAs: async (id, newPath) => {
+    const tab = get().tabs.find((t) => t.id === id)
+    if (!tab) return
+    cancelAutoSaveTimer(id)
+    try {
+      await fsWriteFile(newPath, tab.content)
+      set((state) => ({
+        tabs: state.tabs.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                id: newPath,
+                title: newPath.split(/[\\/]/).pop() ?? newPath,
+                language: getLanguageFromPath(newPath),
+                isDirty: false,
+              }
+            : t,
+        ),
+        activeTabId: id === state.activeTabId ? newPath : state.activeTabId,
+        error: null,
+      }))
+    } catch (e) {
+      set({ error: e instanceof Error ? e.message : String(e) })
+    }
+  },
 
   saveTab: async (id) => {
     const tab = get().tabs.find((t) => t.id === id)
     if (!tab) return
+    // Pestañas sin título: no hay ruta en disco (su id es un nombre relativo
+    // que el backend rechaza) → se fuerza el diálogo Save As
+    if (id.startsWith('untitled-')) {
+      const newPath = await pickSaveFile(tab.title)
+      if (newPath) await get().saveTabAs(id, newPath)
+      return
+    }
     try {
       await fsWriteFile(tab.id, tab.content)
+      cancelAutoSaveTimer(id)
       set((state) => ({
         tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: false } : t)),
         error: null,
@@ -83,9 +174,10 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     }
   },
 
-  reloadExternally: async (path) => {
+  reloadExternally: async (path, force = false) => {
     const tab = get().tabs.find((t) => t.id === path)
-    if (!tab || tab.isDirty) return
+    if (!tab) return
+    if (!force && tab.isDirty) return
     try {
       const content = await useWorkspaceStore.getState().readFile(path)
       set((state) => ({
@@ -94,9 +186,16 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         ),
       }))
     } catch {
-      // El archivo pudo borrarse externamente: la pestaña queda como está
+      if (force) {
+        // Recarga forzada de un archivo que ya no existe (p. ej. rollback de
+        // un archivo creado por el agente): la pestaña se cierra
+        get().closeTab(path)
+      }
+      // Sin force la pestaña queda como está (borrado externo)
     }
   },
+
+  cancelAutoSave: (id) => cancelAutoSaveTimer(id),
 
   insertAtCursor: (text) => {
     const activeTabId = get().activeTabId

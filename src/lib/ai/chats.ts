@@ -2,7 +2,8 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 
 import type { ChatSession, ChatSummary } from '@/types/chat'
 
-// Historial de chats: archivos JSON en app-data (Tauri) o localStorage (dev en navegador)
+// Historial de chats: JSON en app-data (Tauri) con respaldo automático en
+// localStorage; en navegador dev solo localStorage.
 
 const LS_KEY = 'aether-ide-chats'
 
@@ -24,8 +25,12 @@ function writeLocal(chats: ChatSession[]): void {
 }
 
 export async function listChats(): Promise<ChatSummary[]> {
-  if (isTauri()) {
-    return invoke<ChatSummary[]>('list_chats')
+  try {
+    if (isTauri()) {
+      return await invoke<ChatSummary[]>('list_chats')
+    }
+  } catch {
+    // Disco no disponible (reload/recarga): respaldo en localStorage
   }
   return readLocal()
     .map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt }))
@@ -33,26 +38,36 @@ export async function listChats(): Promise<ChatSummary[]> {
 }
 
 export async function loadChat(id: string): Promise<ChatSession | null> {
-  if (isTauri()) {
-    return invoke<ChatSession | null>('load_chat', { id })
+  try {
+    if (isTauri()) {
+      const session = await invoke<ChatSession | null>('load_chat', { id })
+      if (session) return session
+    }
+  } catch {
+    // Disco no disponible: probar respaldo local
   }
   return readLocal().find((c) => c.id === id) ?? null
 }
 
 export async function saveChat(chat: ChatSession): Promise<void> {
-  if (isTauri()) {
-    await invoke('save_chat', { chat })
-    return
+  // Respaldo local SIEMPRE (barato y evita pérdidas si el disco falla)
+  writeLocal([...readLocal().filter((c) => c.id !== chat.id), chat])
+  try {
+    if (isTauri()) {
+      await invoke('save_chat', { chat })
+    }
+  } catch {
+    // El respaldo en localStorage ya protege la sesión
   }
-  const chats = readLocal().filter((c) => c.id !== chat.id)
-  chats.push(chat)
-  writeLocal(chats)
 }
 
 export async function deleteChat(id: string): Promise<void> {
-  if (isTauri()) {
-    await invoke('delete_chat', { id })
-    return
-  }
   writeLocal(readLocal().filter((c) => c.id !== id))
+  try {
+    if (isTauri()) {
+      await invoke('delete_chat', { id })
+    }
+  } catch {
+    // El borrado local ya se aplicó
+  }
 }

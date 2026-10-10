@@ -37,6 +37,27 @@ export async function pickWorkspaceDir(): Promise<string | null> {
   return null
 }
 
+// Diálogos del menú Archivo (solo desktop; en navegador devuelven null)
+export async function pickOpenFile(): Promise<string | null> {
+  if (isTauri()) {
+    return invoke<string | null>('pick_open_file')
+  }
+  return null
+}
+
+export async function pickSaveFile(defaultName?: string): Promise<string | null> {
+  if (isTauri()) {
+    return invoke<string | null>('pick_save_file', { defaultName: defaultName ?? null })
+  }
+  return null
+}
+
+export async function deleteFile(path: string, root: string): Promise<void> {
+  if (isTauri()) {
+    await invoke('delete_file', { path, root })
+  }
+}
+
 // Fase 2.2: watcher y persistencia de sesión (no-ops en navegador)
 export async function watchWorkspace(path: string): Promise<void> {
   if (isTauri()) {

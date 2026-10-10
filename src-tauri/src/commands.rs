@@ -40,6 +40,13 @@ pub fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("No se pudo leer '{path}': {e}"))
 }
 
+/// Comprobación de existencia para los checkpoints del Time Travel: un fallo
+/// de read_file (binario, permisos) no distingue "no existe" de "ilegible"
+#[tauri::command]
+pub fn file_exists(path: String) -> Result<bool, String> {
+    Ok(Path::new(&path).exists())
+}
+
 #[tauri::command]
 pub fn write_file(path: String, content: String) -> Result<(), String> {
     // Escritura atómica: archivo temporal + rename (evita corrupción si el proceso muere)
@@ -219,6 +226,8 @@ pub struct SessionData {
     pub selected_provider: Option<String>,
     pub selected_model: Option<String>,
     pub fetched_models: HashMap<String, Vec<ModelInfo>>,
+    pub active_chat_id: Option<String>,
+    pub auto_save: bool,
 }
 
 #[tauri::command]
@@ -362,13 +371,25 @@ pub fn execute_command(command: String, cwd: String) -> Result<CommandOutput, St
 
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        let mut c = std::process::Command::new("cmd");
-        c.args(["/C", &command]);
+        // PowerShell: mejor manejo de rutas con espacios y sintaxis más rica.
+        // Forzamos salida UTF-8 para que los acentos no lleguen con mojibake.
+        // El `exit` final preserva el código real: sin él, powershell.exe
+        // colapsaba los códigos nativos (p. ej. `cmd /c exit 5`) a 0/1.
+        let mut c = Command::new("powershell.exe");
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &format!(
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; {}; if ($LASTEXITCODE -is [int]) {{ exit $LASTEXITCODE }} elseif ($?) {{ exit 0 }} else {{ exit 1 }}",
+                command
+            ),
+        ]);
         c
     };
     #[cfg(not(target_os = "windows"))]
     let mut cmd = {
-        let mut c = std::process::Command::new("sh");
+        let mut c = Command::new("sh");
         c.args(["-c", &command]);
         c
     };
@@ -537,4 +558,80 @@ pub fn git_push(root: String) -> Result<String, String> {
 #[tauri::command]
 pub fn git_pull(root: String) -> Result<String, String> {
     run_git(&root, &["pull"])
+}
+
+// --- Utilidades del shell (menú Archivo, Fase 5 UI) ---
+
+#[tauri::command]
+pub fn delete_file(path: String, root: String) -> Result<(), String> {
+    // Seguridad: solo se puede eliminar contenido estrictamente DENTRO del
+    // workspace activo. Se canonizan ambas rutas para resistir '..', symlinks
+    // y mezclas de separadores; se prohíbe borrar la propia raíz.
+    if root.trim().is_empty() {
+        return Err("No hay un workspace abierto".to_string());
+    }
+    let root_canon = Path::new(&root)
+        .canonicalize()
+        .map_err(|e| format!("No se pudo resolver el workspace '{root}': {e}"))?;
+    let target = Path::new(&path);
+    let target_canon = target
+        .canonicalize()
+        .map_err(|e| format!("No se pudo resolver '{path}': {e}"))?;
+    if !target_canon.starts_with(&root_canon) || target_canon == root_canon {
+        return Err(format!(
+            "Solo se puede eliminar contenido dentro del workspace activo: {root}"
+        ));
+    }
+    if target_canon.is_dir() {
+        fs::remove_dir_all(&target_canon)
+            .map_err(|e| format!("No se pudo eliminar la carpeta '{path}': {e}"))
+    } else {
+        fs::remove_file(&target_canon).map_err(|e| format!("No se pudo eliminar '{path}': {e}"))
+    }
+}
+
+#[tauri::command]
+pub async fn pick_open_file(app: AppHandle) -> Result<Option<String>, String> {
+    let (tx, mut rx) = tauri::async_runtime::channel::<Option<String>>(1);
+    let _ = app
+        .dialog()
+        .file()
+        .add_filter("Todos los archivos", &["*"])
+        .pick_file(move |file| {
+            let path = file
+                .and_then(|f| f.into_path().ok())
+                .map(|p| p.to_string_lossy().to_string());
+            let _ = tx.blocking_send(path);
+        });
+    rx.recv()
+        .await
+        .ok_or_else(|| "El diálogo se cerró sin completar la selección".to_string())
+}
+
+#[tauri::command]
+pub async fn pick_save_file(
+    app: AppHandle,
+    default_name: Option<String>,
+) -> Result<Option<String>, String> {
+    let (tx, mut rx) = tauri::async_runtime::channel::<Option<String>>(1);
+    let dialog = app.dialog().file().add_filter("Todos los archivos", &["*"]);
+    let dialog = match default_name {
+        Some(name) => dialog.set_file_name(&name),
+        None => dialog,
+    };
+    let _ = dialog.save_file(move |file| {
+        let path = file
+            .and_then(|f| f.into_path().ok())
+            .map(|p| p.to_string_lossy().to_string());
+            let _ = tx.blocking_send(path);
+    });
+    rx.recv()
+        .await
+        .ok_or_else(|| "El diálogo se cerró sin completar la selección".to_string())
+}
+
+#[tauri::command]
+pub fn exit_app(app: AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
 }

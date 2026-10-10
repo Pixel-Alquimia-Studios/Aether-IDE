@@ -2,9 +2,33 @@ import { useEffect, useRef } from 'react'
 
 import { MarkdownRenderer } from '@/components/ai/MarkdownRenderer'
 import { resolveApproval } from '@/lib/agent/tools'
+import { rollbackTurns } from '@/lib/agent/rollback'
 import { useAgentStore } from '@/stores/agentStore'
+import { useChatStore } from '@/stores/chatStore'
 
-export function AgentView() {
+// Agent Time Travel: eliminar/editar una tarea revierte los cambios de
+// archivos que el agente aplicó desde ese punto (vía checkpoints).
+function deleteTaskWithRollback(turnId: string): void {
+  const steps = useAgentStore.getState().steps
+  const stepIdx = steps.findIndex((s) => s.turnId === turnId)
+
+  const ids = new Set<string>([turnId])
+  if (stepIdx >= 0) {
+    for (const step of steps.slice(stepIdx)) {
+      if (step.turnId) ids.add(step.turnId)
+    }
+  }
+  const messages = useChatStore.getState().messages
+  const msgIdx = messages.findIndex((m) => m.role === 'user' && m.turnId === turnId)
+  if (msgIdx >= 0) {
+    for (const message of messages.slice(msgIdx)) {
+      if (message.role === 'user' && message.turnId) ids.add(message.turnId)
+    }
+  }
+  void rollbackTurns(ids)
+}
+
+export function AgentView({ onEditTask }: { onEditTask: (text: string) => void }) {
   const steps = useAgentStore((s) => s.steps)
   const running = useAgentStore((s) => s.running)
   const pendingCommand = useAgentStore((s) => s.pendingCommand)
@@ -35,7 +59,7 @@ export function AgentView() {
             step.type === 'tool'
               ? ''
               : step.role === 'user'
-                ? 'flex justify-end'
+                ? 'group relative flex justify-end'
                 : 'flex justify-start'
           }
         >
@@ -60,19 +84,42 @@ export function AgentView() {
               )}
             </div>
           ) : (
-            <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] ${
-                step.role === 'user'
-                  ? 'bg-aether-accent/25 text-white'
-                  : 'border border-aether-border bg-aether-surface text-aether-text'
-              }`}
-            >
-              {step.role === 'user' ? (
-                <p className="whitespace-pre-wrap">{step.content}</p>
-              ) : (
-                <MarkdownRenderer content={step.content ?? ''} />
+            <>
+              <div
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] ${
+                  step.role === 'user'
+                    ? 'bg-aether-accent/25 text-white'
+                    : 'border border-aether-border bg-aether-surface text-aether-text'
+                }`}
+              >
+                {step.role === 'user' ? (
+                  <p className="whitespace-pre-wrap">{step.content}</p>
+                ) : (
+                  <MarkdownRenderer content={step.content ?? ''} />
+                )}
+              </div>
+              {step.role === 'user' && step.turnId && !running && (
+                <div className="absolute top-1 right-1 hidden items-center gap-0.5 rounded bg-aether-surface/90 p-0.5 shadow group-hover:flex">
+                  <button
+                    title="Editar tarea (revierte los cambios posteriores)"
+                    onClick={() => {
+                      onEditTask(step.content ?? '')
+                      deleteTaskWithRollback(step.turnId as string)
+                    }}
+                    className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    title="Eliminar tarea (revierte los cambios del agente desde aquí)"
+                    onClick={() => deleteTaskWithRollback(step.turnId as string)}
+                    className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                  >
+                    🗑
+                  </button>
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
       ))}
@@ -80,12 +127,8 @@ export function AgentView() {
       {/* Confirmación previa de acciones destructivas (write_file / execute_command) */}
       {pendingCommand && (
         <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3">
-          <p className="text-[13px] font-medium text-amber-300">
-            El agente solicita tu permiso:
-          </p>
-          <p className="mt-1 break-all font-mono text-[12px] text-aether-text">
-            {pendingCommand}
-          </p>
+          <p className="text-[13px] font-medium text-amber-300">El agente solicita tu permiso:</p>
+          <p className="mt-1 break-all font-mono text-[12px] text-aether-text">{pendingCommand}</p>
           <div className="mt-2 flex gap-2">
             <button
               onClick={() => resolveApproval(true)}

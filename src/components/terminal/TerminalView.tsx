@@ -71,9 +71,22 @@ export function TerminalView() {
       }
     })
 
-    // Resize del contenedor → fit + PTY resize
+    // Resize del contenedor → fit + PTY resize, con rAF-debounce para
+    // silenciar "ResizeObserver loop completed with undelivered notifications"
+    let rafHandle: number | null = null
     const resizeHandler = (): void => {
-      fitRef.current?.fit()
+      if (rafHandle !== null) cancelAnimationFrame(rafHandle)
+      rafHandle = requestAnimationFrame(() => {
+        rafHandle = null
+        // Solo fit si el contenedor es visible (evita fits con tamaño 0)
+        if (containerRef.current && containerRef.current.clientWidth > 0) {
+          try {
+            fitRef.current?.fit()
+          } catch {
+            // fit puede fallar si el contenedor aún no tiene dimensiones
+          }
+        }
+      })
     }
     term.onResize(({ rows, cols }) => {
       if (terminalIdRef.current) {
@@ -86,6 +99,7 @@ export function TerminalView() {
 
     return () => {
       cancelled = true
+      if (rafHandle !== null) cancelAnimationFrame(rafHandle)
       window.removeEventListener('resize', resizeHandler)
       observer.disconnect()
       unlistenOutput?.()

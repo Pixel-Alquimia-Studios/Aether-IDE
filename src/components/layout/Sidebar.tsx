@@ -1,5 +1,6 @@
 import { FileTreeNode } from '@/components/explorer/FileTreeNode'
 import { GitView } from '@/components/git/GitView'
+import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 
@@ -18,43 +19,75 @@ export function Sidebar() {
   const loading = useWorkspaceStore((s) => s.loading)
   const error = useWorkspaceStore((s) => s.error)
   const openWorkspace = useWorkspaceStore((s) => s.openWorkspace)
+  const refreshTree = useWorkspaceStore((s) => s.refreshTree)
+  const openUntitledFile = useEditorStore((s) => s.openUntitledFile)
 
   return (
     <div className="flex w-64 flex-col border-r border-aether-border bg-aether-surface">
-      <div className="px-3 py-2 text-[11px] font-semibold tracking-wider text-aether-text-dim uppercase">
-        {VIEW_TITLES[activeView]}
+      <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
+        <span className="text-[10px] font-semibold tracking-[0.08em] text-aether-text-dim uppercase">
+          {VIEW_TITLES[activeView]}
+        </span>
+        {activeView === 'explorer' && (
+          <div className="flex items-center gap-0.5">
+            <button
+              title="New File"
+              onClick={() => void openUntitledFile()}
+              className="rounded px-1.5 py-0.5 text-[12px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+            >
+              ＋
+            </button>
+            <button
+              title="Refresh Explorer"
+              onClick={() => void refreshTree()}
+              className="rounded px-1.5 py-0.5 text-[12px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+            >
+              ↻
+            </button>
+          </div>
+        )}
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-2">
         {activeView === 'explorer' && (
           <>
-            <div className="flex items-center justify-between px-3 py-1">
-              <span className="text-[13px] font-semibold text-aether-text">
+            <button
+              onClick={() => void openWorkspace()}
+              title="Abrir carpeta…"
+              className="group flex w-full items-center gap-1 px-3 py-1 text-left"
+            >
+              <span className="text-[9px] leading-none text-aether-text-dim transition-transform">▾</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-wide text-aether-text group-hover:text-white">
                 {rootName ?? 'Sin carpeta abierta'}
               </span>
-              <button
-                title="Abrir carpeta…"
-                onClick={() => void openWorkspace()}
-                className="rounded px-1.5 text-[13px] text-aether-text-dim hover:bg-white/10"
-              >
+              <span className="shrink-0 text-[12px] opacity-0 transition-opacity group-hover:opacity-100" title="Abrir carpeta…">
                 📂
-              </button>
+              </span>
+            </button>
+            {loading && <p className="px-3 py-1 text-[12px] text-aether-text-dim">Cargando…</p>}
+            {error && <p className="px-3 py-1 text-[11px] text-red-400">{error}</p>}
+            <div className="mt-0.5">
+              {fileTree.map((node) => (
+                <FileTreeNode key={node.path} node={node} depth={0} />
+              ))}
             </div>
-            {loading && <p className="px-3 py-1 text-aether-text-dim">Cargando…</p>}
-            {error && <p className="px-3 py-1 text-xs text-red-400">{error}</p>}
-            {fileTree.map((node) => (
-              <FileTreeNode key={node.path} node={node} depth={0} />
-            ))}
+            {!loading && fileTree.length === 0 && !error && (
+              <p className="px-3 py-2 text-[12px] text-aether-text-dim">
+                Abre una carpeta con 📂 o Archivo → Open Folder...
+              </p>
+            )}
           </>
         )}
         {activeView === 'search' && (
-          <p className="px-3 py-2 text-aether-text-dim">Búsqueda global (próximamente)</p>
+          <p className="px-3 py-2 text-[12px] text-aether-text-dim">
+            Búsqueda global (usa Ctrl+Shift+F en una próxima versión)
+          </p>
         )}
         {activeView === 'ai' && (
-          <p className="px-3 py-2 text-aether-text-dim">Usa el panel de chat 💬</p>
+          <p className="px-3 py-2 text-[12px] text-aether-text-dim">Usa el panel de chat 💬</p>
         )}
         {activeView === 'git' && <GitView />}
         {activeView === 'settings' && (
-          <p className="px-3 py-2 text-aether-text-dim">Ajustes en la vista central</p>
+          <p className="px-3 py-2 text-[12px] text-aether-text-dim">Ajustes en la vista central</p>
         )}
       </div>
     </div>
