@@ -49,6 +49,7 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
+| [aether-ide-0.1.2-x64-portable.exe](downloads/0.1.2/aether-ide-0.1.2-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 9,86 MB |
 | [aether-ide-0.1.2-x64-setup.exe](downloads/0.1.2/aether-ide-0.1.2-x64-setup.exe) | Instalador NSIS (Windows x64) | 4,91 MB |
 | [aether-ide-0.1.2-x64.msi](downloads/0.1.2/aether-ide-0.1.2-x64.msi) | Instalador MSI (Windows x64) | 5,73 MB |
 
