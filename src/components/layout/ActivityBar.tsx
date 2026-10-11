@@ -4,6 +4,7 @@ const VIEWS: Array<{ id: SidebarView; icon: string; title: string; group: number
   { id: 'explorer', icon: '📁', title: 'Explorer', group: 1 },
   { id: 'search', icon: '🔍', title: 'Search', group: 1 },
   { id: 'git', icon: '🌿', title: 'Source Control', group: 1 },
+  { id: 'extensions', icon: '🧩', title: 'Extensions', group: 1 },
   { id: 'ai', icon: '💬', title: 'AI Chat', group: 2 },
   { id: 'settings', icon: '⚙️', title: 'Settings', group: 3 },
 ]

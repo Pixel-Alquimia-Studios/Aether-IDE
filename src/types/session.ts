@@ -13,4 +13,6 @@ export interface SessionData {
   /** Chat activo: se restaura al iniciar (sobrevive reloads de HMR) */
   activeChatId: string | null
   autoSave: boolean
+  /** Modo del panel: 'chat' | 'agent' — se restaura con el chat activo */
+  agentMode: string | null
 }

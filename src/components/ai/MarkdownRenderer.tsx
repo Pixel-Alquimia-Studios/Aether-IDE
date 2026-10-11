@@ -1,6 +1,8 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import 'highlight.js/styles/github-dark.css'
 
 import { useEditorStore } from '@/stores/editorStore'
@@ -19,7 +21,10 @@ export function MarkdownRenderer({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      // rehype-raw: renderiza el HTML embebido (READMEs de Open VSX);
+      // rehype-sanitize: limpia scripts/handlers para evitar XSS;
+      // rehype-highlight va DESPUÉS de sanitize para conservar las clases hljs
+      rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
       components={{
         pre: ({ children }) => <>{children}</>,
         code(props) {

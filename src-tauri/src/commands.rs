@@ -228,6 +228,7 @@ pub struct SessionData {
     pub fetched_models: HashMap<String, Vec<ModelInfo>>,
     pub active_chat_id: Option<String>,
     pub auto_save: bool,
+    pub agent_mode: Option<String>,
 }
 
 #[tauri::command]

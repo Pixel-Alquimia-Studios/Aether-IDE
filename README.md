@@ -45,7 +45,15 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.1.2 *(actual)*
+### v0.1.3 *(actual)*
+
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.1.3-x64-portable.exe](downloads/0.1.3/aether-ide-0.1.3-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 9,91 MB |
+| [aether-ide-0.1.3-x64-setup.exe](downloads/0.1.3/aether-ide-0.1.3-x64-setup.exe) | Instalador NSIS (Windows x64) | 4,96 MB |
+| [aether-ide-0.1.3-x64.msi](downloads/0.1.3/aether-ide-0.1.3-x64.msi) | Instalador MSI (Windows x64) | 5,78 MB |
+
+### v0.1.2
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
@@ -63,6 +71,21 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.1.3
+
+**Añadido**
+- Menú **Ver** en la barra superior: Terminal Integrada (`Ctrl+J`), Barra Lateral (`Ctrl+B`) y Command Palette
+- **Marketplace de Extensiones** conectado a la API pública de Open VSX: búsqueda con debounce, vista de detalle con README/versión/autor/icono oficial (`Ctrl+Shift+X`)
+- **Material Icon Theme** integrado: descarga y extracción del VSIX (con `fflate`), iconos SVG oficiales para archivos y carpetas (incluyendo variantes expandidas) en el Explorer, con whitelist de instalación e instalar/desinstalar
+- Filtros de **Readme renderizado** (HTML embebido sanitizado) e imágenes remotas del marketplace
+
+**Corregido** (auditoría de 9 hallazgos del Bugbot)
+- CSP con `connect-src`: los fetch a Open VSX ya no son bloqueados por el WebView
+- Persistencia del **modo agente/chat**: al reiniciar, el panel vuelve al modo con el que se cerró
+- Carreras de búsqueda y detalle en el marketplace (guards por secuencia), `searchError` limpio en éxito
+- Iconos de carpeta con variante abierta/cerrada y `img-src` de CSP restringido a hosts de confianza
+- README de Open VSX con verificación HTTP y caché de iconos v3 (invalida caches con mappings vacíos)
 
 ### v0.1.2
 

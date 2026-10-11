@@ -30,6 +30,7 @@ function buildSession(): SessionData {
     fetchedModels: useSettingsStore.getState().fetchedModels,
     activeChatId: useChatStore.getState().chatId,
     autoSave: ui.autoSave,
+    agentMode: useAgentStore.getState().mode,
   }
 }
 
@@ -68,6 +69,10 @@ export function useSession(): void {
       // los reloads de HMR ya no pierden el chat en curso
       if (session.autoSave) {
         useUiStore.setState({ autoSave: true })
+      }
+      // Restaurar el MODO del panel (chat/agente) tal como se cerró
+      if (session.agentMode) {
+        useAgentStore.setState({ mode: session.agentMode === 'agent' ? 'agent' : 'chat' })
       }
       if (session.activeChatId) {
         const activeChat = await loadChat(session.activeChatId)
@@ -139,7 +144,10 @@ export function useSession(): void {
       useUiStore.subscribe(schedule),
       useWorkspaceStore.subscribe(schedule),
       useSettingsStore.subscribe(schedule),
-      useChatStore.subscribe(scheduleChatPersist),
+      // agentMode se persiste en session.json (schedule), los mensajes/pasos
+      // del chat activo en chats/*.json (scheduleChatPersist)
+      useChatStore.subscribe(schedule),
+      useAgentStore.subscribe(schedule),
       useAgentStore.subscribe(scheduleChatPersist),
     ]
 

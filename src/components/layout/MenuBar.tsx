@@ -21,6 +21,11 @@ export function MenuBar() {
   const autoSave = useUiStore((s) => s.autoSave)
   const toggleAutoSave = useUiStore((s) => s.toggleAutoSave)
   const showView = useUiStore((s) => s.showView)
+  const panelVisible = useUiStore((s) => s.panelVisible)
+  const togglePanel = useUiStore((s) => s.togglePanel)
+  const sidebarVisible = useUiStore((s) => s.sidebarVisible)
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar)
+  const setPaletteOpen = useUiStore((s) => s.setPaletteOpen)
 
   const close = (): void => setOpenMenu(null)
 
@@ -96,8 +101,32 @@ export function MenuBar() {
     },
   ]
 
+  const viewMenu: MenuItem[] = [
+    {
+      id: 'terminal',
+      label: 'Terminal Integrada',
+      shortcut: 'Ctrl+J',
+      checked: panelVisible,
+      run: () => togglePanel(),
+    },
+    {
+      id: 'sidebar',
+      label: 'Barra Lateral',
+      shortcut: 'Ctrl+B',
+      checked: sidebarVisible,
+      run: () => toggleSidebar(),
+    },
+    {
+      id: 'palette',
+      label: 'Command Palette',
+      shortcut: 'Ctrl+Shift+P',
+      run: () => setPaletteOpen(true),
+    },
+  ]
+
   const menus: Array<{ id: string; label: string; items: MenuItem[] }> = [
     { id: 'file', label: 'Archivo', items: fileMenu },
+    { id: 'view', label: 'Ver', items: viewMenu },
   ]
 
   const handleKeyDown = (e: ReactKeyboardEvent): void => {
@@ -158,7 +187,7 @@ export function MenuBar() {
 
       <span className="ml-2 truncate text-[12px] text-aether-text-dim">Aether IDE</span>
       <span className="flex-1" />
-      <span className="pr-2 text-[10px] text-aether-text-dim">v0.1.2</span>
+      <span className="pr-2 text-[10px] text-aether-text-dim">v0.1.3</span>
     </div>
   )
 }

@@ -32,6 +32,12 @@ export function useKeyboardShortcuts(): void {
         ui.togglePanel()
         return
       }
+      if (isCtrl(e) && e.shiftKey && key === 'x') {
+        // Vista de Extensiones (Marketplace de Open VSX)
+        e.preventDefault()
+        ui.showView('extensions')
+        return
+      }
       if (isCtrl(e) && !e.shiftKey && key === 'i') {
         // Edit with prompt: solo con selección activa en el editor
         const editor = getEditorInstance()

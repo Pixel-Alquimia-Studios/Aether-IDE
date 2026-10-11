@@ -1,4 +1,5 @@
 import { FileTreeNode } from '@/components/explorer/FileTreeNode'
+import { ExtensionsView } from '@/components/extensions/ExtensionsView'
 import { GitView } from '@/components/git/GitView'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -9,6 +10,7 @@ const VIEW_TITLES = {
   search: 'Search',
   ai: 'AI Chat',
   git: 'Source Control',
+  extensions: 'Extensions',
   settings: 'Settings',
 } as const
 
@@ -21,6 +23,10 @@ export function Sidebar() {
   const openWorkspace = useWorkspaceStore((s) => s.openWorkspace)
   const refreshTree = useWorkspaceStore((s) => s.refreshTree)
   const openUntitledFile = useEditorStore((s) => s.openUntitledFile)
+
+  // Nota: los iconos de Material (Open VSX) se restauran del cache en el estado
+  // inicial del store — aquí NO se auto-carga, para que "Desinstalar" no
+  // reinstale solo (los iconos solo se descargan desde el botón Instalar).
 
   return (
     <div className="flex w-64 flex-col border-r border-aether-border bg-aether-surface">
@@ -86,6 +92,7 @@ export function Sidebar() {
           <p className="px-3 py-2 text-[12px] text-aether-text-dim">Usa el panel de chat 💬</p>
         )}
         {activeView === 'git' && <GitView />}
+        {activeView === 'extensions' && <ExtensionsView />}
         {activeView === 'settings' && (
           <p className="px-3 py-2 text-[12px] text-aether-text-dim">Ajustes en la vista central</p>
         )}

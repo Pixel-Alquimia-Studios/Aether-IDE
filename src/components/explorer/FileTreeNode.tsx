@@ -1,5 +1,11 @@
 import { useEditorStore } from '@/stores/editorStore'
 import { useGitStore } from '@/stores/gitStore'
+import {
+  useVsxStore,
+  getMaterialFileIcon,
+  getMaterialFolderIcon,
+  svgToDataUrl,
+} from '@/lib/vsx/materialIcons'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { FileNode } from '@/types/workspace'
 
@@ -11,7 +17,7 @@ const STATUS_COLORS: Record<string, string> = {
   R: '#73c991',
 }
 
-// Iconos de archivo por extensión (glifo coloreado, estilo minimal)
+// Iconos de archivo por extensión (glifo coloreado, fallback sin Material Icons)
 const FILE_ICONS: Record<string, { glyph: string; color: string }> = {
   ts: { glyph: 'TS', color: '#4d9cd6' },
   tsx: { glyph: 'TSX', color: '#4d9cd6' },
@@ -35,6 +41,17 @@ const FILE_ICONS: Record<string, { glyph: string; color: string }> = {
 }
 
 function FileIcon({ name }: { name: string }) {
+  // 1. Icono oficial del Material Icon Theme (Open VSX) si está cargado
+  const material = getMaterialFileIcon(name, useVsxStore((s) => s.data))
+  if (material) {
+    return (
+      <span className="flex h-[22px] w-6 shrink-0 items-center justify-center">
+        <img src={svgToDataUrl(material)} alt="" width={16} height={16} />
+      </span>
+    )
+  }
+
+  // 2. Fallback: glifo coloreado por extensión
   const ext = name.includes('.') ? (name.split('.').pop()?.toLowerCase() ?? '') : ''
   const icon = FILE_ICONS[ext]
   if (!icon) {
@@ -52,6 +69,18 @@ function FileIcon({ name }: { name: string }) {
       {icon.glyph}
     </span>
   )
+}
+
+function FolderIcon({ name, expanded }: { name: string; expanded: boolean }) {
+  const material = getMaterialFolderIcon(name, expanded, useVsxStore((s) => s.data))
+  if (material) {
+    return (
+      <span className="flex h-[22px] w-6 shrink-0 items-center justify-center">
+        <img src={svgToDataUrl(material)} alt="" width={16} height={16} />
+      </span>
+    )
+  }
+  return <span className="text-[11px] leading-none">{expanded ? '📂' : '📁'}</span>
 }
 
 export function FileTreeNode({ node, depth }: { node: FileNode; depth: number }) {
@@ -88,16 +117,13 @@ export function FileTreeNode({ node, depth }: { node: FileNode; depth: number })
             : 'border-l-2 border-transparent text-aether-text hover:bg-white/[0.04]'
         }`}
       >
-        <span className="w-3.5 shrink-0 text-center text-[9px] leading-none text-aether-text-dim transition-transform duration-100" style={{ transform: isDir && isExpanded ? 'rotate(90deg)' : 'none' }}>
+        <span
+          className="w-3.5 shrink-0 text-center text-[9px] leading-none text-aether-text-dim transition-transform duration-100"
+          style={{ transform: isDir && isExpanded ? 'rotate(90deg)' : 'none' }}
+        >
           {isDir ? '▶' : ''}
         </span>
-        {isDir ? (
-          <span className="text-[11px] leading-none">
-            {isExpanded ? '📂' : '📁'}
-          </span>
-        ) : (
-          <FileIcon name={node.name} />
-        )}
+        {isDir ? <FolderIcon name={node.name} expanded={isExpanded} /> : <FileIcon name={node.name} />}
         <span className={`min-w-0 flex-1 truncate ${isDir ? 'font-medium' : ''}`}>{node.name}</span>
         {gitColor && (
           <span className="ml-1 shrink-0 text-[10px] font-bold" style={{ color: gitColor }}>
