@@ -8,6 +8,28 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 // por el agente desde un punto del historial. Módulo neutro para evitar
 // dependencias circulares entre chatStore y agentStore.
 
+/** Rollback completo de una TAREA del agente (por turnId): trunca el chat,
+ *  filtra los pasos y restaura los archivos afectados desde los checkpoints */
+export function deleteAgentTaskWithRollback(turnId: string): void {
+  const steps = useAgentStore.getState().steps
+  const stepIdx = steps.findIndex((s) => s.turnId === turnId)
+
+  const ids = new Set<string>([turnId])
+  if (stepIdx >= 0) {
+    for (const step of steps.slice(stepIdx)) {
+      if (step.turnId) ids.add(step.turnId)
+    }
+  }
+  const messages = useChatStore.getState().messages
+  const msgIdx = messages.findIndex((m) => m.role === 'user' && m.turnId === turnId)
+  if (msgIdx >= 0) {
+    for (const message of messages.slice(msgIdx)) {
+      if (message.role === 'user' && message.turnId) ids.add(message.turnId)
+    }
+  }
+  void rollbackTurns(ids)
+}
+
 /** TurnIds de los mensajes user desde `index` hasta el final del chat */
 export function collectTurnIdsFrom(index: number): Set<string> {
   const messages = useChatStore.getState().messages

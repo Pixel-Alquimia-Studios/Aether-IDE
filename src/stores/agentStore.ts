@@ -3,13 +3,18 @@ import { create } from 'zustand'
 import { chatWithTools } from '@/lib/ai/api'
 import { buildContextBlock, getActiveEditorContext, resolveMentions } from '@/lib/ai/context'
 import { AGENT_TOOLS, runTool } from '@/lib/agent/tools'
+import { SUBAGENT_TOOL_NAMES, parseFindings, type SubagentDef } from '@/lib/agent/subagents'
 import { getActiveProviderConfig } from '@/stores/settingsStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { AgentCheckpoint, AgentStep } from '@/types/agent'
 import type { MentionContext } from '@/types/chat'
 
-const MAX_STEPS = 20
+// Límite del agente mutador (protección contra bucles de escritura).
+// Los SUBAGENTES de análisis (/qa, /security, /audit) NO tienen límite:
+// son de solo lectura y no pueden dañar nada — cortarlos a mitad de
+// análisis destruía el reporte.
+const MAX_STEPS = 40
 
 // Entorno detectado: el agente debe conocer el SO y la shell para no usar
 // sintaxis equivocada (cat/Get-Content contra cmd.exe, etc.)
@@ -17,11 +22,11 @@ const OS_HINT = navigator.userAgent.includes('Windows')
   ? 'ENTORNO: Windows. Los comandos se ejecutan con PowerShell (powershell.exe). Usa cmdlets: "Get-Content archivo" para ver contenido, "Get-ChildItem" para listar, "Set-Content" para escribir. IMPORTANTE: las rutas con espacios DEBEN ir SIEMPRE entre comillas dobles: "C:\\Users\\Mi Carpeta\\...". El comando ya se ejecuta con el workspace como directorio actual: NO uses "cd".'
   : 'ENTORNO: sistema Unix. Los comandos se ejecutan con sh — usa comandos POSIX estándar.'
 
-const AGENT_SYSTEM_PROMPT = `Eres un agente de código dentro de un IDE. Tienes herramientas para leer archivos, buscar texto, listar directorios, escribir archivos y ejecutar comandos (escribir y ejecutar requieren confirmación del usuario). Resuelve la tarea paso a paso usando las herramientas.
+const AGENT_SYSTEM_PROMPT = `Eres un agente de código dentro de un IDE.
 
 ${OS_HINT}
 
-REGLAS DE EFICIENCIA: usa search_files para localizar código ANTES de leer; NO releas el mismo archivo (el output de read_file se trunca a 2000 caracteres); no ejecutes comandos que ya fallaron con la misma sintaxis; no releas para "verificar": confía en el resultado de write_file. Cuando hayas terminado, responde al usuario con un resumen claro de lo que hiciste.`
+Tienes herramientas para leer archivos, buscar texto, listar directorios, escribir archivos y ejecutar comandos (escribir y ejecutar requieren confirmación del usuario). Resuelve la tarea paso a paso usando las herramientas. Cuando hayas terminado, responde al usuario con un resumen claro de lo que hiciste.`
 
 function makeId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -30,8 +35,8 @@ function makeId(): string {
 }
 
 interface AgentState {
-  /** Modo del panel: chat conversacional o agente con herramientas */
-  mode: 'chat' | 'agent'
+  /** Modo del panel: plan (texto normal) o agent (ejecuta tareas) */
+  mode: 'plan' | 'agent'
   steps: AgentStep[]
   running: boolean
   /** Comando/escritura pendiente de confirmación del usuario */
@@ -40,18 +45,24 @@ interface AgentState {
   /** Snapshots de archivos previos a las ediciones del agente (Time Travel) */
   checkpoints: AgentCheckpoint[]
 
-  setMode: (mode: 'chat' | 'agent') => void
+  setMode: (mode: 'plan' | 'agent') => void
   setPendingCommand: (label: string | null) => void
   /** Reemplaza los pasos mostrados (al reanudar un chat desde el historial) */
   setSteps: (steps: AgentStep[]) => void
   addCheckpoint: (checkpoint: AgentCheckpoint) => void
   applyRollback: (turnIds: Set<string>) => void
   reset: () => void
-  runAgent: (task: string, mentions?: MentionContext[], options?: { includeAutoContext?: boolean }, turnId?: string) => Promise<void>
+  runAgent: (
+    task: string,
+    mentions?: MentionContext[],
+    options?: { includeAutoContext?: boolean },
+    turnId?: string,
+    subagent?: SubagentDef,
+  ) => Promise<void>
 }
 
 export const useAgentStore = create<AgentState>()((set) => ({
-  mode: 'chat',
+  mode: 'plan',
   steps: [],
   running: false,
   pendingCommand: null,
@@ -71,9 +82,11 @@ export const useAgentStore = create<AgentState>()((set) => ({
     })),
   reset: () => set({ steps: [], error: null }),
 
-  // Bucle de razonamiento (tool loop): el frontend orquesta los pasos,
-  // cada paso es una llamada chat_with_tools + ejecución de herramientas.
-  runAgent: async (task, mentions = [], options, turnId) => {
+  // Bucle de razonamiento (tool loop): el frontend orquesta los pasos.
+  // Con subagent (/qa, /security, /audit): tools de SOLO LECTURA y system
+  // prompt especializado — el reporte final se parsea como tarjetas de
+  // hallazgos. Sin subagente: agente completo con todas las herramientas.
+  runAgent: async (task, mentions = [], options, turnId, subagent) => {
     const trimmed = task.trim()
     if (!trimmed || useAgentStore.getState().running) return
     const config = getActiveProviderConfig()
@@ -94,11 +107,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
     // registra la tarea como mensaje para que quede en el historial
     useChatStore.getState().ensureAgentChat(trimmed, turn)
 
-    set((state) => ({
-      running: true,
-      error: null,
-      steps: [...state.steps, { type: 'text', role: 'user', content: trimmed, turnId: turn }],
-    }))
+    set({ running: true, error: null })
 
     // Contexto: menciones @ + archivo activo del editor (automático, salvo
     // que el usuario lo haya quitado con la ✕ de la pill)
@@ -111,18 +120,27 @@ export const useAgentStore = create<AgentState>()((set) => ({
       ? `${contextBlock}\n\nTarea: ${trimmed}`
       : `Tarea: ${trimmed}`
 
+    const systemPrompt = subagent ? subagent.systemPrompt : AGENT_SYSTEM_PROMPT
+    const tools = subagent
+      ? AGENT_TOOLS.filter((t) => SUBAGENT_TOOL_NAMES.has(t.name))
+      : AGENT_TOOLS
+
+    // Los SUBAGENTES (solo lectura) corren SIN límite de pasos; el agente
+    // mutador conserva un tope alto como protección de escrituras
+    const maxSteps = subagent ? Number.POSITIVE_INFINITY : MAX_STEPS
+
     const history: Array<{ role: string; content: string }> = [
-      { role: 'system', content: AGENT_SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: `Workspace: ${workspaceRoot}\n\n${userPayload}` },
     ]
 
     try {
-      for (let step = 0; step < MAX_STEPS; step++) {
+      for (let step = 0; step < maxSteps; step++) {
         const response = await chatWithTools({
           providerId: config.providerId,
           model: config.model,
           messages: history,
-          tools: AGENT_TOOLS,
+          tools,
           thinkingLevel: useChatStore.getState().thinkingLevel,
         })
 
@@ -140,10 +158,31 @@ export const useAgentStore = create<AgentState>()((set) => ({
             })
             continue
           }
+
+          const reportTs = Date.now()
+          const findings = subagent ? parseFindings(response.text) : null
           set((state) => ({
             steps: [
               ...state.steps,
-              { type: 'text', role: 'assistant', content: response.text, turnId: turn },
+              {
+                type: 'text',
+                role: 'assistant',
+                content: response.text,
+                turnId: turn,
+                ts: reportTs,
+                botName: subagent?.botName,
+              },
+              ...(findings && findings.length > 0
+                ? [
+                    {
+                      type: 'report' as const,
+                      findings,
+                      turnId: turn,
+                      ts: reportTs + 1,
+                      botName: subagent?.botName,
+                    },
+                  ]
+                : []),
             ],
           }))
           void useChatStore.getState().persistActive()
@@ -154,7 +193,14 @@ export const useAgentStore = create<AgentState>()((set) => ({
           set((state) => ({
             steps: [
               ...state.steps,
-              { type: 'text', role: 'assistant', content: response.message, turnId: turn },
+              {
+                type: 'text',
+                role: 'assistant',
+                content: response.message,
+                turnId: turn,
+                ts: Date.now(),
+                botName: subagent?.botName,
+              },
             ],
           }))
         }
@@ -169,7 +215,15 @@ export const useAgentStore = create<AgentState>()((set) => ({
           set((state) => ({
             steps: [
               ...state.steps,
-              { type: 'tool', name: call.name, args: call.arguments, status: 'running', turnId: turn },
+              {
+                type: 'tool',
+                name: call.name,
+                args: call.arguments,
+                status: 'running',
+                turnId: turn,
+                ts: Date.now(),
+                botName: subagent?.botName,
+              },
             ],
           }))
           const output = await runTool(call, workspaceRoot, turn)
@@ -197,6 +251,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
             role: 'assistant',
             content: `He alcanzado el límite de pasos (${MAX_STEPS}) sin completar la tarea.`,
             turnId: turn,
+            ts: Date.now(),
           },
         ],
       }))

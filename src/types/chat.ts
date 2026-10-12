@@ -33,6 +33,8 @@ export interface ChatSession {
   messages: StoredChatMessage[]
   /** Pasos del agente asociados a la conversación (persistidos con la sesión) */
   agentSteps?: AgentStep[]
+  /** Workspace al que pertenece la sesión — los chats son por carpeta */
+  workspaceRoot?: string
 }
 
 export interface ChatMessage {
@@ -40,6 +42,8 @@ export interface ChatMessage {
   content: string
   /** Identificador de turno (para Agent Time Travel / rollback) */
   turnId?: string
+  /** Timestamp de creación (para el timeline unificado) */
+  ts?: number
   /** Razonamiento acumulado (Chain of Thought) del modelo */
   thinking?: string
   /** Duración del razonamiento (hasta el primer contenido) */

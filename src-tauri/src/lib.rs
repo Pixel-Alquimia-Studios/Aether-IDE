@@ -10,6 +10,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
+            commands::read_file_range,
             commands::file_exists,
             commands::write_file,
             commands::read_dir,

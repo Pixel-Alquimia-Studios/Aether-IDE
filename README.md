@@ -6,7 +6,7 @@
 
 React + TypeScript · Rust (Tauri v2) · Monaco Editor
 
-[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.1.2-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
+[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.1.4-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
@@ -27,7 +27,8 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 - **13 proveedores**: OpenAI, Anthropic (Claude), DeepSeek, Mistral, xAI (Grok), Groq, NVIDIA NIM, Together, Qwen, MiniMax, Google Gemini, Ollama y LM Studio (locales)
 - **Chat con streaming** por canal IPC nativo, con selector de **nivel de razonamiento** (Low/Medium/High/Max) para modelos thinking
 - **Bloques de razonamiento** colapsables (Chain of Thought de DeepSeek R1, Claude, o-series…)
-- **Modo Agente con tool-calling**: `read_file`, `search_files`, `list_directory`, `write_file` y `execute_command` — con **confirmación del usuario** para acciones destructivas y bucle de hasta 20 pasos
+- **Modo Agente con tool-calling**: `read_file`, `search_files`, `list_directory`, `write_file` y `execute_command` — con **confirmación del usuario** para acciones destructivas
+- **Subagentes de análisis de solo lectura**: `/qa` (BugBot 🐛), `/security` (SecBot 🛡) y `/audit` (AuditBot 📋) — reportan hallazgos con badges de severidad (critical/high/medium/low) sin tocar tu código
 - **Agent Time Travel**: checkpoints automáticos antes de cada escritura; editar/eliminar un mensaje anterior **revierte los archivos** aplicados desde ese punto
 - **Menciones `@`**: adjunta archivos (`@main.ts`), el archivo actual (`@current`) o la estructura del workspace (`@codebase`) al contexto del LLM
 - **Inline completions** (ghost text) aceptables con Tab, con debounce inteligente
@@ -39,13 +40,22 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 - **Integración Git completa**: staged/unstaged, stage/unstage individual y masivo, commit, push/pull
 - **Terminal integrada** (`Ctrl+J`): PTY real (ConPTY en Windows) con PowerShell, conectada a `xterm.js`
 - Persistencia completa: workspace, pestañas, layout, modelos obtenidos y **sesiones de chat/agentes** sobreviven a recargas y reinicios
-- Historial de conversaciones con renombrar/eliminar; los chats del agente se guardan con sus pasos completos
+- **Panel Plan / Agente** con timeline unificado: la conversación y los pasos del agente permanecen visibles al alternar de modo
+- Los **chats son por carpeta**: cada workspace tiene su propio historial de conversaciones y sesiones de agente
 
 ## ⬇ Descargas
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.1.3 *(actual)*
+### v0.1.4 *(actual)*
+
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.1.4-x64-portable.exe](downloads/0.1.4/aether-ide-0.1.4-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 9,93 MB |
+| [aether-ide-0.1.4-x64-setup.exe](downloads/0.1.4/aether-ide-0.1.4-x64-setup.exe) | Instalador NSIS (Windows x64) | 4,97 MB |
+| [aether-ide-0.1.4-x64.msi](downloads/0.1.4/aether-ide-0.1.4-x64.msi) | Instalador MSI (Windows x64) | 5,79 MB |
+
+### v0.1.3
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
@@ -71,6 +81,19 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.1.4
+
+**Añadido**
+- **Subagentes de análisis de solo lectura**: `/qa` (**🐛 BugBot** — bugs y edge cases), `/security` (**🛡 SecBot** — vulnerabilidades estilo white-hat) y `/audit` (**📋 AuditBot** — fusión de ambos), disponibles en ambos modos y **sin límite de pasos** (no pueden modificar nada)
+- **Reporte de hallazgos con tarjetas y badges de severidad** (critical/high/medium/low) con archivo, línea y detalle — parseados del bloque `aether-findings` del subagente
+- **Panel unificado Plan / Agente** con timeline cronológico compartido: al alternar de modo, la conversación y los pasos del agente **permanecen visibles** (solo cambia el comportamiento del input)
+- **Lectura de archivos por secciones**: `read_file` acepta `start_line`/`end_line` (`read_file_range` en Rust) para analizar archivos grandes sin truncados a ciegas
+
+**Corregido**
+- **Truncado de archivos** al escribir con el agente: si los argumentos de una herramienta llegan cortados por límite de tokens (`__truncated`), la escritura se **rechaza con error claro** en vez de vaciar el archivo (validación estricta de `content`/`command` en `runTool`)
+- Los subagentes ya no "reconstruyen" archivos con `search_files`: las reglas de lectura enseñan el uso de secciones y el límite de pasos ya no corta el análisis
+- Límite de pasos del agente elevado a 40 (con protección anti-bucle de escrituras)
 
 ### v0.1.3
 

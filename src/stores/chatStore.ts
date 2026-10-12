@@ -5,12 +5,15 @@ import { buildContextBlock, getActiveEditorContext, resolveMentions } from '@/li
 import { deleteChat as deleteChatApi, listChats, loadChat as loadChatApi, saveChat as saveChatApi } from '@/lib/ai/chats'
 import { getActiveProviderConfig } from '@/stores/settingsStore'
 import { useAgentStore } from '@/stores/agentStore'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ChatMessage, ChatSummary, MentionContext, ThinkingLevel } from '@/types/chat'
 
 interface ChatState {
   chatId: string | null
   chatTitle: string | null
   chatCreatedAt: number | null
+  /** Workspace al que pertenece el chat activo — los chats son por carpeta */
+  chatWorkspaceRoot: string | null
   messages: ChatMessage[]
   history: ChatSummary[]
   streaming: boolean
@@ -26,6 +29,8 @@ interface ChatState {
   persistActive: () => Promise<void>
   /** Modo agente: crea la sesión si no existe (título desde la orden) y registra la tarea */
   ensureAgentChat: (task: string, turnId: string) => void
+  /** Limpia el chat activo (al cambiar de workspace tras guardar) */
+  clearActiveChat: () => void
   sendMessage: (text: string, mentions?: MentionContext[], options?: { includeAutoContext?: boolean }) => Promise<void>
   applyRollback: (turnIds: Set<string>) => void
   resumeChat: (id: string) => Promise<void>
@@ -45,7 +50,7 @@ function titleFrom(text: string): string {
 }
 
 async function persist(get: () => ChatState): Promise<void> {
-  const { chatId, chatTitle, chatCreatedAt, messages } = get()
+  const { chatId, chatTitle, chatCreatedAt, chatWorkspaceRoot, messages } = get()
   if (!chatId || messages.length === 0) return
   // Los pasos del agente del chat activo se guardan con la conversación
   const agentSteps = useAgentStore.getState().steps
@@ -64,6 +69,9 @@ async function persist(get: () => ChatState): Promise<void> {
         ...(m.turnId ? { turnId: m.turnId } : {}),
       })),
     agentSteps: agentSteps.length > 0 ? agentSteps : undefined,
+    // El chat pertenece a la carpeta donde se creó (no cambia si el usuario
+    // abre otra carpeta después)
+    workspaceRoot: chatWorkspaceRoot ?? undefined,
   })
 }
 
@@ -71,6 +79,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   chatId: null,
   chatTitle: null,
   chatCreatedAt: null,
+  chatWorkspaceRoot: null,
   messages: [],
   history: [],
   streaming: false,
@@ -92,8 +101,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   refreshHistory: async () => {
+    // Historial filtrado por el workspace activo (los chats son por carpeta)
+    const root = useWorkspaceStore.getState().rootPath ?? ''
     try {
-      set({ history: await listChats() })
+      set({ history: await listChats(root) })
     } catch {
       set({ history: [] })
     }
@@ -103,9 +114,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (get().streaming) return
     // Guarda la sesión actual (NO se borra) y limpia el panel para empezar
     await persist(get)
-    set({ chatId: null, chatTitle: null, chatCreatedAt: null, messages: [], statusText: null, error: null })
+    set({ chatId: null, chatTitle: null, chatCreatedAt: null, chatWorkspaceRoot: null, messages: [], statusText: null, error: null })
     useAgentStore.getState().reset()
     await get().refreshHistory()
+  },
+
+  // Limpia el chat activo (tras guardar) — usado al cambiar de workspace
+  clearActiveChat: () => {
+    set({ chatId: null, chatTitle: null, chatCreatedAt: null, chatWorkspaceRoot: null, messages: [], statusText: null, error: null })
+    useAgentStore.getState().reset()
   },
 
   persistActive: async () => {
@@ -117,10 +134,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // en el historial y se persiste como cualquier conversación.
   ensureAgentChat: (task, turnId) => {
     if (!get().chatId) {
-      set({ chatId: makeId(), chatTitle: titleFrom(task), chatCreatedAt: Date.now() })
+      // El chat queda ligado al workspace activo en el momento de crearse
+      set({
+        chatId: makeId(),
+        chatTitle: titleFrom(task),
+        chatCreatedAt: Date.now(),
+        chatWorkspaceRoot: useWorkspaceStore.getState().rootPath,
+      })
     }
     set((state) => ({
-      messages: [...state.messages, { role: 'user', content: task, turnId }],
+      messages: [
+        ...state.messages,
+        { role: 'user', content: task, turnId, ts: Date.now() },
+      ],
     }))
     // Persist + refresh: el chat del agente aparece en el historial al instante
     void persist(get).then(() => get().refreshHistory())
@@ -142,6 +168,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         chatId,
         chatTitle: titleFrom(trimmed),
         chatCreatedAt: Date.now(),
+        chatWorkspaceRoot: useWorkspaceStore.getState().rootPath,
       })
     }
 
@@ -164,11 +191,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     // Turno asociado a este mensaje (para Time Travel / rollback)
     const turnId = `turn-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
+    const now = Date.now()
+
     set((state) => ({
       messages: [
         ...state.messages,
-        { role: 'user', content: trimmed, turnId },
-        { role: 'assistant', content: '' },
+        { role: 'user', content: trimmed, turnId, ts: now },
+        { role: 'assistant', content: '', ts: now },
       ],
       streaming: true,
       statusText: null,
@@ -242,6 +271,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       chatId: session.id,
       chatTitle: session.title,
       chatCreatedAt: session.createdAt,
+      chatWorkspaceRoot: session.workspaceRoot ?? null,
       messages: session.messages
         .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim() !== '')
         .map((m) => ({
@@ -253,7 +283,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       error: null,
     })
     // Restaurar también los pasos del agente guardados con la sesión
-    useAgentStore.getState().setSteps(session.agentSteps ?? [])
+    // (sin los steps 'user': redundantes — la tarea vive como chat message)
+    useAgentStore
+      .getState()
+      .setSteps(
+        (session.agentSteps ?? []).filter((s) => !(s.type === 'text' && s.role === 'user')),
+      )
   },
 
   renameChat: async (id, title) => {
@@ -271,7 +306,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   deleteChat: async (id) => {
     await deleteChatApi(id)
     if (get().chatId === id) {
-      set({ chatId: null, chatTitle: null, chatCreatedAt: null, messages: [] })
+      set({ chatId: null, chatTitle: null, chatCreatedAt: null, chatWorkspaceRoot: null, messages: [] })
     }
     await get().refreshHistory()
   },

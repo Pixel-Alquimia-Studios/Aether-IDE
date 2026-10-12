@@ -4,6 +4,8 @@ import type { ChatSession, ChatSummary } from '@/types/chat'
 
 // Historial de chats: JSON en app-data (Tauri) con respaldo automático en
 // localStorage; en navegador dev solo localStorage.
+// Los chats son POR CARPETA: cada sesión guarda su workspace y el historial
+// se filtra por el workspace activo.
 
 const LS_KEY = 'aether-ide-chats'
 
@@ -24,15 +26,17 @@ function writeLocal(chats: ChatSession[]): void {
   }
 }
 
-export async function listChats(): Promise<ChatSummary[]> {
+export async function listChats(root: string): Promise<ChatSummary[]> {
   try {
     if (isTauri()) {
-      return await invoke<ChatSummary[]>('list_chats')
+      return await invoke<ChatSummary[]>('list_chats', { root })
     }
   } catch {
     // Disco no disponible (reload/recarga): respaldo en localStorage
   }
+  // Los chats son por carpeta: solo sesiones de ESTE workspace
   return readLocal()
+    .filter((c) => c.workspaceRoot === root)
     .map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt }))
     .sort((a, b) => b.updatedAt - a.updatedAt)
 }

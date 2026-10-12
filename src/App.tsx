@@ -13,6 +13,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
 import { useEditorStore } from '@/stores/editorStore'
+import { useChatStore } from '@/stores/chatStore'
 import { useGitStore } from '@/stores/gitStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
@@ -31,9 +32,23 @@ export default function App() {
   const gitRefresh = useGitStore((s) => s.refresh)
   const rootPath = useWorkspaceStore((s) => s.rootPath)
 
-  // Refresh del estado git al abrir/cambiar de workspace
+  // Refresh del estado git y del HISTORIAL DE CHATS al abrir/cambiar de
+  // workspace (los chats son por carpeta). Si el chat activo pertenece a otra
+  // carpeta, se guarda y se limpia el panel.
   useEffect(() => {
     void gitRefresh()
+    const chat = useChatStore.getState()
+    if (chat.chatWorkspaceRoot && rootPath && chat.chatWorkspaceRoot !== rootPath) {
+      void chat
+        .persistActive()
+        .then(() => {
+          useChatStore.getState().clearActiveChat()
+          return useChatStore.getState().refreshHistory()
+        })
+        .catch(() => undefined)
+    } else {
+      void useChatStore.getState().refreshHistory()
+    }
   }, [rootPath, gitRefresh])
 
   const handleWorkspaceChanged = useCallback(

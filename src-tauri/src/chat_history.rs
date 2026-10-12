@@ -27,6 +27,9 @@ pub struct ChatSession {
     /// Pasos del agente persistidos (transparentes para Rust: se guardan tal cual)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_steps: Option<Vec<serde_json::Value>>,
+    /// Workspace al que pertenece la sesión — los chats son por carpeta
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -86,7 +89,7 @@ pub fn create_chat(app: AppHandle, chat: ChatSession) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn list_chats(app: AppHandle) -> Result<Vec<ChatSummary>, String> {
+pub fn list_chats(app: AppHandle, root: String) -> Result<Vec<ChatSummary>, String> {
     let dir = chats_dir(&app)?;
     let mut summaries = Vec::new();
     let entries = fs::read_dir(&dir).map_err(|e| format!("No se pudo leer el historial: {e}"))?;
@@ -101,6 +104,10 @@ pub fn list_chats(app: AppHandle) -> Result<Vec<ChatSummary>, String> {
         let Ok(session) = serde_json::from_str::<ChatSession>(&raw) else {
             continue;
         };
+        // Los chats son por carpeta: solo sesiones de ESTE workspace
+        if session.workspace_root.as_deref() != Some(root.as_str()) {
+            continue;
+        }
         summaries.push(ChatSummary {
             id: session.id,
             title: session.title,

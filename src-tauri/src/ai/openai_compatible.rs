@@ -212,6 +212,9 @@ impl Provider for OpenAiCompatibleProvider {
             .as_str()
             .unwrap_or("")
             .to_string();
+        // finish_reason "length": la respuesta se cortó por límite de tokens —
+        // los argumentos de las tool calls suelen llegar incompletos
+        let response_truncated = value["choices"][0]["finish_reason"].as_str() == Some("length");
         let calls = value["choices"][0]["message"]["tool_calls"]
             .as_array()
             .map(|arr| {
@@ -220,8 +223,12 @@ impl Provider for OpenAiCompatibleProvider {
                     .filter_map(|(i, tc)| {
                         let name = tc["function"]["name"].as_str()?.to_string();
                         let raw = tc["function"]["arguments"].as_str().unwrap_or("{}");
-                        let arguments: serde_json::Value =
-                            serde_json::from_str(raw).unwrap_or(json!({}));
+                        let arguments: serde_json::Value = if response_truncated {
+                            // Respuesta truncada: el JSON llega casi seguro roto
+                            json!({ "__truncated": true })
+                        } else {
+                            serde_json::from_str(raw).unwrap_or(json!({ "__truncated": true }))
+                        };
                         let id = tc["id"]
                             .as_str()
                             .map(|s| s.to_string())

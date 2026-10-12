@@ -40,6 +40,44 @@ pub fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("No se pudo leer '{path}': {e}"))
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadRange {
+    pub content: String,
+    pub total_lines: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+/// Lectura por secciones para el análisis del agente: permite leer archivos
+/// grandes por rangos de líneas sin truncar a ciegas
+#[tauri::command]
+pub fn read_file_range(
+    path: String,
+    start_line: usize,
+    end_line: usize,
+) -> Result<ReadRange, String> {
+    let content = fs::read_to_string(&path).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
+    let lines: Vec<&str> = content.lines().collect();
+    let total_lines = lines.len();
+    if total_lines == 0 {
+        return Ok(ReadRange {
+            content: String::new(),
+            total_lines: 0,
+            start_line: 0,
+            end_line: 0,
+        });
+    }
+    let start = start_line.max(1).min(total_lines);
+    let end = end_line.max(start).min(total_lines);
+    Ok(ReadRange {
+        content: lines[start - 1..end].join("\n"),
+        total_lines: total_lines,
+        start_line: start,
+        end_line: end,
+    })
+}
+
 /// Comprobación de existencia para los checkpoints del Time Travel: un fallo
 /// de read_file (binario, permisos) no distingue "no existe" de "ilegible"
 #[tauri::command]

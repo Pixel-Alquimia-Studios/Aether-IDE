@@ -187,7 +187,7 @@ export function MenuBar() {
 
       <span className="ml-2 truncate text-[12px] text-aether-text-dim">Aether IDE</span>
       <span className="flex-1" />
-      <span className="pr-2 text-[10px] text-aether-text-dim">v0.1.3</span>
+      <span className="pr-2 text-[10px] text-aether-text-dim">v0.1.4</span>
     </div>
   )
 }

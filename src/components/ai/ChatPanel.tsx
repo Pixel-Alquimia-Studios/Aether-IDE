@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 
-import { AgentView } from '@/components/ai/AgentView'
+import { FindingsReport } from '@/components/ai/FindingsReport'
 import { MarkdownRenderer } from '@/components/ai/MarkdownRenderer'
 import { ThinkingBlock } from '@/components/ai/ThinkingBlock'
 import { collectTurnIdsFrom, rollbackTurns } from '@/lib/agent/rollback'
+import { detectSubagent, SUBAGENTS } from '@/lib/agent/subagents'
 import { fuzzyScore } from '@/lib/commands/fuzzy'
 import { useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
-import type { MentionContext, ThinkingLevel } from '@/types/chat'
+import type { ChatMessage, MentionContext, ThinkingLevel } from '@/types/chat'
+import type { AgentStep } from '@/types/agent'
 import type { FileNode } from '@/types/workspace'
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -46,6 +48,11 @@ const THINKING_OPTIONS: Array<{ value: ThinkingLevel; label: string }> = [
   { value: 'max', label: 'Max' },
 ]
 
+/** Item del timeline unificado (mensajes de Plan + pasos del Agente) */
+type TimelineItem =
+  | { kind: 'chat'; ts: number; index: number; msg: ChatMessage }
+  | { kind: 'agent'; ts: number; step: AgentStep }
+
 export function ChatPanel() {
   const providers = useSettingsStore((s) => s.providers)
   const selectedProviderId = useSettingsStore((s) => s.selectedProviderId)
@@ -71,23 +78,40 @@ export function ChatPanel() {
   const deleteChatAction = useChatStore((s) => s.deleteChat)
   const refreshHistory = useChatStore((s) => s.refreshHistory)
 
-  // Modo agente
+  // Modo del panel: Plan (texto normal) o Agente (ejecuta tareas)
   const agentMode = useAgentStore((s) => s.mode)
   const setAgentMode = useAgentStore((s) => s.setMode)
   const runAgent = useAgentStore((s) => s.runAgent)
   const agentRunning = useAgentStore((s) => s.running)
+  const agentError = useAgentStore((s) => s.error)
+  const steps = useAgentStore((s) => s.steps)
 
   const [input, setInput] = useState('')
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  // Menciones @: query abierto (null = cerrado), índice activo y pills añadidas
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentions, setMentions] = useState<MentionContext[]>([])
-  /** Contexto automático del editor: quitado con la ✕ de la pill */
   const [autoContextEnabled, setAutoContextEnabled] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Timeline unificado: mensajes del chat + pasos del agente, ordenados por ts
+  const timeline = useMemo<TimelineItem[]>(() => {
+    const items: TimelineItem[] = [
+      ...messages.map((msg, index) => ({
+        kind: 'chat' as const,
+        ts: msg.ts ?? 0,
+        index,
+        msg,
+      })),
+      // Los steps 'user' del agente son redundantes: la tarea vive como mensaje
+      ...steps
+        .filter((s) => !(s.type === 'text' && s.role === 'user'))
+        .map((step) => ({ kind: 'agent' as const, ts: step.ts ?? 0, step })),
+    ]
+    // Sort estable: items sin ts mantienen su orden relativo dentro del grupo
+    return items.sort((a, b) => a.ts - b.ts)
+  }, [messages, steps])
 
   useEffect(() => {
     if (providers.length === 0) void loadProviders()
@@ -99,7 +123,7 @@ export function ChatPanel() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, statusText, error])
+  }, [timeline, statusText, error, agentError])
 
   const selected = providers.find((p) => p.id === selectedProviderId) ?? null
   const models = selected
@@ -114,9 +138,9 @@ export function ChatPanel() {
   // Contexto del editor activo (pill informativa sobre el input)
   const activeTabPath = useEditorStore((s) => s.activeTabId)
   const activeCtxName = activeTabPath ? (activeTabPath.split(/[\\/]/).pop() ?? '') : ''
+  const fileTree = useWorkspaceStore((s) => s.fileTree)
 
   // Opciones del menú de menciones: archivos del workspace + @codebase + @current
-  const fileTree = useWorkspaceStore((s) => s.fileTree)
   const mentionOptions = useMemo<MentionContext[]>(() => {
     const walk = (nodes: FileNode[]): MentionContext[] =>
       nodes.flatMap((node) => {
@@ -168,16 +192,22 @@ export function ChatPanel() {
   const send = (): void => {
     const text = input.trim()
     if (!text) return
+
+    // Subagentes (/qa, /security, /audit): disponibles en ambos modos
+    const detected = detectSubagent(text)
     const currentMentions = [...mentions]
     const contextOptions = { includeAutoContext: autoContextEnabled }
-    if (agentMode === 'agent') {
-      if (agentRunning) return
+
+    if (detected || agentMode === 'agent') {
+      const busy = agentMode === 'agent' ? agentRunning : streaming
+      if (busy) return
       setInput('')
       setMentions([])
       setMentionQuery(null)
-      void runAgent(text, currentMentions, contextOptions)
+      void runAgent(text, currentMentions, contextOptions, undefined, detected?.subagent)
       return
     }
+
     if (streaming) return
     setInput('')
     setMentions([])
@@ -215,19 +245,20 @@ export function ChatPanel() {
     }
   }
 
-  // Agent Time Travel: trunca el chat desde el mensaje i y revierte los
-  // cambios de archivos que el agente aplicó desde ese punto
-  const truncateFrom = (index: number): void => {
+  // Time Travel: trunca el chat desde el turno indicado y revierte los
+  // archivos que el agente aplicó desde ese punto (vía checkpoints)
+  const truncateFromTurn = (turnId: string): void => {
     if (streaming || agentRunning) return
-    const turnIds = collectTurnIdsFrom(index)
+    const idx = useChatStore.getState().messages.findIndex((m) => m.turnId === turnId)
+    if (idx === -1) return
+    const turnIds = collectTurnIdsFrom(idx)
     void rollbackTurns(turnIds)
   }
 
-  const editMessage = (index: number): void => {
-    const msg = messages[index]
-    if (!msg || msg.role !== 'user' || streaming || agentRunning) return
-    setInput(msg.content)
-    truncateFrom(index)
+  const editMessageByTurn = (turnId: string, text: string): void => {
+    if (streaming || agentRunning) return
+    setInput(text)
+    truncateFromTurn(turnId)
   }
 
   const commitRename = (): void => {
@@ -237,6 +268,12 @@ export function ChatPanel() {
     setRenaming(false)
   }
 
+  const applySubagentChip = (slash: string): void => {
+    const base = input.replace(/^\/(qa|security|audit)\s*/i, '')
+    setInput(`${slash} ${base}`.trimEnd() + ' ')
+    setMentionQuery(null)
+  }
+
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       {/* Historial de chats: nuevo / reanudar / renombrar / eliminar */}
@@ -244,7 +281,7 @@ export function ChatPanel() {
         <button
           title="Nuevo chat"
           onClick={() => void newChat()}
-          disabled={streaming}
+          disabled={streaming || agentRunning}
           className="rounded px-2 py-1 text-[13px] text-aether-text hover:bg-white/10 disabled:opacity-40"
         >
           ＋
@@ -269,7 +306,7 @@ export function ChatPanel() {
             setRenameValue(chatTitle ?? '')
             setRenaming(true)
           }}
-          disabled={!chatId || streaming}
+          disabled={!chatId || streaming || agentRunning}
           className="rounded px-1.5 py-1 text-[12px] text-aether-text-dim hover:bg-white/10 disabled:opacity-40"
         >
           ✎
@@ -277,7 +314,7 @@ export function ChatPanel() {
         <button
           title="Eliminar chat"
           onClick={() => chatId && void deleteChatAction(chatId)}
-          disabled={!chatId || streaming}
+          disabled={!chatId || streaming || agentRunning}
           className="rounded px-1.5 py-1 text-[12px] text-aether-text-dim hover:bg-white/10 disabled:opacity-40"
         >
           🗑
@@ -310,7 +347,7 @@ export function ChatPanel() {
         </div>
       )}
 
-      {/* Selector rápido de proveedor/modelo + thinking level */}
+      {/* Selector rápido de proveedor/modelo + toggle Plan/Agente */}
       <div className="border-b border-aether-border bg-aether-surface p-2">
         <div className="flex items-center gap-2">
           <select
@@ -345,9 +382,9 @@ export function ChatPanel() {
           </select>
         </div>
         <div className="mt-1.5 flex items-center gap-2">
-          {/* Toggle Chat / Agente */}
+          {/* Toggle Plan / Agente */}
           <div className="flex shrink-0 rounded border border-aether-border p-0.5">
-            {(['chat', 'agent'] as const).map((m) => (
+            {(['plan', 'agent'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setAgentMode(m)}
@@ -357,7 +394,7 @@ export function ChatPanel() {
                     : 'text-aether-text-dim hover:text-aether-text'
                 }`}
               >
-                {m === 'chat' ? 'Chat' : '🤖 Agente'}
+                {m === 'plan' ? '📝 Plan' : '🤖 Agente'}
               </button>
             ))}
           </div>
@@ -387,130 +424,201 @@ export function ChatPanel() {
         </div>
       </div>
 
-      {/* Área de mensajes (chat) o pasos del agente */}
-      {agentMode === 'agent' ? (
-        <AgentView onEditTask={(text) => setInput(text)} />
-      ) : (
-        <div className="flex-1 space-y-3 overflow-y-auto p-3">
-          {messages.length === 0 && (
-            <div className="flex h-full items-center justify-center text-aether-text-dim">
-              <p className="text-center">
-                {selected
-                  ? `Haz una pregunta a ${selected.name}`
+      {/* TIMELINE UNIFICADO: visible en ambos modos (Plan y Agente) */}
+      <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        {timeline.length === 0 && (
+          <div className="flex h-full items-center justify-center text-aether-text-dim">
+            <p className="max-w-[90%] text-center text-[13px]">
+              {agentMode === 'agent'
+                ? 'Describe una tarea para el agente o usa /qa, /security, /audit para análisis de solo lectura.'
+                : selected
+                  ? `Haz una pregunta a ${selected.name} — usa @ para adjuntar contexto`
                   : 'Selecciona un proveedor arriba'}
-              </p>
-            </div>
-          )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`group relative flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+            </p>
+          </div>
+        )}
+        {timeline.map((item, i) => {
+          if (item.kind === 'agent') {
+            const step = item.step
+            const prevItem = i > 0 ? timeline[i - 1] : null
+            const botKey = step.botName ?? null
+            // Encabezado de identidad del subagente (solo al iniciar su grupo)
+            const showBotHeader =
+              botKey !== null && !(prevItem?.kind === 'agent' && prevItem.step.botName === botKey)
+            const subagentDef = SUBAGENTS.find((s) => s.botName === botKey)
+            const botEmoji = subagentDef?.emoji ?? '🤖'
+
+            let content: React.ReactNode
+            if (step.type === 'tool') {
+              content = (
+                <div className="rounded border border-aether-border bg-aether-bg px-2.5 py-1.5 text-[12px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-aether-text-dim">⚙ {step.name}</span>
+                    {step.status === 'running' ? (
+                      <span className="text-aether-accent">ejecutando…</span>
+                    ) : (
+                      <details className="min-w-0 flex-1">
+                        <summary className="cursor-pointer text-[11px] text-aether-text-dim">
+                          ver resultado
+                        </summary>
+                      </details>
+                    )}
+                  </div>
+                  {step.status === 'done' && step.output && (
+                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-aether-text-dim">
+                      {step.output}
+                    </pre>
+                  )}
+                </div>
+              )
+            } else if (step.type === 'report' && step.findings) {
+              content = <FindingsReport findings={step.findings} botName={step.botName} />
+            } else {
+              content = (
+                <div className="rounded-lg border border-aether-border bg-aether-surface px-3 py-2 text-[13px] text-aether-text">
+                  <MarkdownRenderer content={step.content ?? ''} />
+                </div>
+              )
+            }
+
+            return (
+              <div key={`a-${i}-${step.ts}`} className={botKey ? 'rounded-lg border border-dashed border-aether-accent/30 bg-aether-accent/[0.03] p-2' : ''}>
+                {showBotHeader && botKey && (
+                  <div className="mb-1.5 flex items-center gap-1.5 px-1">
+                    <span className="text-[11px] font-bold text-aether-accent">
+                      {botEmoji} {botKey}
+                    </span>
+                    <span className="text-[10px] text-aether-text-dim">
+                      subagente de análisis · solo lectura
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-2">{content}</div>
+              </div>
+            )
+          }
+
+          // Mensajes del modo Plan
+          const msg = item.msg
+          const isUser = msg.role === 'user'
+          return (
             <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] ${
-                msg.role === 'user'
-                  ? 'bg-aether-accent/25 text-white'
-                  : 'border border-aether-border bg-aether-surface text-aether-text'
-              }`}
+              key={`chat-${item.index}-${msg.ts ?? i}`}
+              className={`group relative flex ${isUser ? 'justify-end' : 'justify-start'}`}
             >
-              {msg.role === 'assistant' ? (
-                <>
-                  {msg.thinking && (
-                    <ThinkingBlock
-                      thinking={msg.thinking}
-                      durationMs={msg.thinkingDurationMs}
-                      active={streaming && msg.content === ''}
-                    />
-                  )}
-                  <MarkdownRenderer content={msg.content} />
-                  {msg.metrics && (
-                    <div className="mt-1 flex justify-end">
-                      <span className="text-[10px] text-aether-text-dim">
-                        ⚡ {formatElapsed(msg.metrics.elapsedMs)} · ~{msg.metrics.tokens} tokens
-                      </span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+              <div
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] ${
+                  isUser
+                    ? 'bg-aether-accent/25 text-white'
+                    : 'border border-aether-border bg-aether-surface text-aether-text'
+                }`}
+              >
+                {isUser ? (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                ) : (
+                  <>
+                    {msg.thinking && (
+                      <ThinkingBlock
+                        thinking={msg.thinking}
+                        durationMs={msg.thinkingDurationMs}
+                        active={streaming && msg.content === ''}
+                      />
+                    )}
+                    <MarkdownRenderer content={msg.content} />
+                    {msg.metrics && (
+                      <div className="mt-1 flex justify-end">
+                        <span className="text-[10px] text-aether-text-dim">
+                          ⚡ {formatElapsed(msg.metrics.elapsedMs)} · ~{msg.metrics.tokens} tokens
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Time Travel: editar / eliminar mensajes del usuario */}
+              {isUser && msg.turnId && !streaming && !agentRunning && (
+                <div className="absolute top-1 right-1 hidden items-center gap-0.5 rounded bg-aether-surface/90 p-0.5 shadow group-hover:flex">
+                  <button
+                    title="Editar y reenviar (revierte los cambios posteriores)"
+                    onClick={() => editMessageByTurn(msg.turnId as string, msg.content)}
+                    className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    title="Eliminar (revierte los cambios del agente desde aquí)"
+                    onClick={() => truncateFromTurn(msg.turnId as string)}
+                    className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                  >
+                    🗑
+                  </button>
+                </div>
               )}
             </div>
-
-            {/* Time Travel: editar / eliminar mensajes del usuario */}
-            {msg.role === 'user' && !streaming && !agentRunning && (
-              <div className="absolute top-1 right-1 hidden items-center gap-0.5 rounded bg-aether-surface/90 p-0.5 shadow group-hover:flex">
-                <button
-                  title="Editar y reenviar (revierte los cambios posteriores)"
-                  onClick={() => editMessage(i)}
-                  className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
-                >
-                  ✏️
-                </button>
-                <button
-                  title="Eliminar (revierte los cambios del agente desde aquí)"
-                  onClick={() => truncateFrom(i)}
-                  className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
-                >
-                  🗑
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
+          )
+        })}
         {statusText && (
           <p className="text-center text-[11px] text-aether-text-dim">{statusText}</p>
         )}
         {error && <p className="text-center text-[11px] text-red-400">{error}</p>}
+        {agentError && <p className="text-center text-[11px] text-red-400">{agentError}</p>}
         <div ref={messagesEndRef} />
-        </div>
-      )}
+      </div>
 
-      {/* Input con contexto y menciones @ */}
+      {/* Chips de subagentes + contexto + menciones */}
       <div className="relative border-t border-aether-border p-2">
-        {/* Pills de contexto actual y menciones añadidas */}
-        {(activeCtxName || mentions.length > 0) && (
-          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-            {autoContextEnabled && activeCtxName && (
-              <span
-                title={`Contexto automático: ${activeTabPath}`}
-                className="flex items-center gap-1 rounded-full border border-aether-border bg-aether-bg px-2 py-0.5 text-[10px] text-aether-text-dim"
-              >
-                📄 {activeCtxName}
-                <button
-                  title="Quitar contexto automático"
-                  onClick={() => setAutoContextEnabled(false)}
-                  className="text-aether-text-dim hover:text-aether-text"
-                >
-                  ✕
-                </button>
-              </span>
-            )}
-            {!autoContextEnabled && activeCtxName && (
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          {SUBAGENTS.map((s) => (
+            <button
+              key={s.id}
+              title={`${s.slash} — ${s.description}`}
+              onClick={() => applySubagentChip(s.slash)}
+              className="rounded-full border border-aether-border bg-aether-bg px-2 py-0.5 text-[10px] text-aether-text-dim hover:border-aether-accent/50 hover:text-aether-text"
+            >
+              {s.emoji} {s.botName}
+            </button>
+          ))}
+          {autoContextEnabled && activeCtxName && (
+            <span
+              title={`Contexto automático: ${activeTabPath}`}
+              className="flex items-center gap-1 rounded-full border border-aether-border bg-aether-bg px-2 py-0.5 text-[10px] text-aether-text-dim"
+            >
+              📄 {activeCtxName}
               <button
-                title="Restaurar contexto automático del editor"
-                onClick={() => setAutoContextEnabled(true)}
-                className="rounded-full border border-dashed border-aether-border px-2 py-0.5 text-[10px] text-aether-text-dim hover:text-aether-text"
+                title="Quitar contexto automático"
+                onClick={() => setAutoContextEnabled(false)}
+                className="text-aether-text-dim hover:text-aether-text"
               >
-                ＋ {activeCtxName}
+                ✕
               </button>
-            )}
-            {mentions.map((m, i) => (
-              <span
-                key={`${m.kind}-${m.label}-${i}`}
-                className="flex items-center gap-1 rounded-full border border-aether-accent/40 bg-aether-accent/10 px-2 py-0.5 text-[10px] text-aether-text"
+            </span>
+          )}
+          {!autoContextEnabled && activeCtxName && (
+            <button
+              title="Restaurar contexto automático del editor"
+              onClick={() => setAutoContextEnabled(true)}
+              className="rounded-full border border-dashed border-aether-border px-2 py-0.5 text-[10px] text-aether-text-dim hover:text-aether-text"
+            >
+              ＋ {activeCtxName}
+            </button>
+          )}
+          {mentions.map((m, i) => (
+            <span
+              key={`${m.kind}-${m.label}-${i}`}
+              className="flex items-center gap-1 rounded-full border border-aether-accent/40 bg-aether-accent/10 px-2 py-0.5 text-[10px] text-aether-text"
+            >
+              {m.kind === 'codebase' ? '🌐' : '📄'} {m.label}
+              <button
+                title="Quitar"
+                onClick={() => removeMention(i)}
+                className="text-aether-text-dim hover:text-aether-text"
               >
-                {m.kind === 'codebase' ? '🌐' : '📄'} {m.label}
-                <button
-                  title="Quitar"
-                  onClick={() => removeMention(i)}
-                  className="text-aether-text-dim hover:text-aether-text"
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
 
         {/* Menú flotante de menciones */}
         {mentionQuery !== null && (
@@ -551,9 +659,9 @@ export function ChatPanel() {
             onKeyDown={handleKeyDown}
             placeholder={
               agentMode === 'agent'
-                ? 'Describe la tarea para el agente… (usa @ para adjuntar contexto)'
+                ? 'Tarea para el agente… (/qa, /security, /audit para análisis)'
                 : selected
-                  ? 'Mensaje… (usa @ para adjuntar contexto)'
+                  ? 'Escribe tu plan o pregunta… (usa @ y /qa, /security, /audit)'
                   : 'Selecciona un proveedor en Ajustes…'
             }
             rows={2}
@@ -571,10 +679,20 @@ export function ChatPanel() {
             }
             className="rounded bg-aether-accent px-3 py-2 text-[13px] text-white disabled:opacity-40"
           >
-            {streaming || agentRunning ? '…' : agentMode === 'agent' ? 'Ejecutar' : 'Enviar'}
+            {streaming || agentRunning
+              ? '…'
+              : detectedSubagentLabel(input)
+                ? 'Analizar'
+                : agentMode === 'agent'
+                  ? 'Ejecutar'
+                  : 'Enviar'}
           </button>
         </div>
       </div>
     </div>
   )
+}
+
+function detectedSubagentLabel(text: string): boolean {
+  return detectSubagent(text) !== null
 }

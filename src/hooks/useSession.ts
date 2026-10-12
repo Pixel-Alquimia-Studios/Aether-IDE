@@ -70,17 +70,22 @@ export function useSession(): void {
       if (session.autoSave) {
         useUiStore.setState({ autoSave: true })
       }
-      // Restaurar el MODO del panel (chat/agente) tal como se cerró
+      // Restaurar el MODO del panel (plan/agente). Sesiones antiguas usaban
+      // 'chat' como alias de 'plan'
       if (session.agentMode) {
-        useAgentStore.setState({ mode: session.agentMode === 'agent' ? 'agent' : 'chat' })
+        const legacyMode = session.agentMode === 'agent' ? 'agent' : 'plan'
+        useAgentStore.setState({ mode: legacyMode })
       }
-      if (session.activeChatId) {
+      // Restaurar el chat ACTIVO solo si pertenece a la MISMA carpeta:
+      // los chats son por workspace (no se mezclan entre proyectos)
+      if (session.activeChatId && session.rootPath) {
         const activeChat = await loadChat(session.activeChatId)
-        if (activeChat && !cancelled) {
+        if (activeChat && !cancelled && activeChat.workspaceRoot === session.rootPath) {
           useChatStore.setState({
             chatId: activeChat.id,
             chatTitle: activeChat.title,
             chatCreatedAt: activeChat.createdAt,
+            chatWorkspaceRoot: activeChat.workspaceRoot ?? session.rootPath,
             messages: activeChat.messages
               .filter(
                 (m) =>
