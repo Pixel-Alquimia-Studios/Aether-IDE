@@ -1,4 +1,6 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+
+import { check, type Update } from '@tauri-apps/plugin-updater'
 
 import { ActivityBar } from '@/components/layout/ActivityBar'
 import { EditorView } from '@/components/editor/EditorView'
@@ -9,6 +11,9 @@ import { ChatPanel } from '@/components/ai/ChatPanel'
 import { SettingsView } from '@/components/settings/SettingsView'
 import { TerminalView } from '@/components/terminal/TerminalView'
 import { MenuBar } from '@/components/layout/MenuBar'
+import { termsAccepted } from '@/lib/terms'
+import { TermsDialog } from '@/components/settings/TermsDialog'
+import { UpdateOverlay } from '@/components/updater/UpdateOverlay'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
@@ -24,6 +29,10 @@ export default function App() {
   const activeView = useUiStore((s) => s.activeView)
   const panelVisible = useUiStore((s) => s.panelVisible)
   const togglePanel = useUiStore((s) => s.togglePanel)
+  const chatPanelVisible = useUiStore((s) => s.chatPanelVisible)
+  const termsDialogOpen = useUiStore((s) => s.termsDialogOpen)
+  const [termsVisible, setTermsVisible] = useState(() => !termsAccepted())
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null)
   useKeyboardShortcuts()
   useSession()
 
@@ -61,14 +70,35 @@ export default function App() {
   )
   useWorkspaceEvents(handleWorkspaceChanged)
 
+  // Fase G: comprobar actualizaciones al abrir la app
+  useEffect(() => {
+    if (!termsAccepted()) return
+    void check()
+      .then((update) => {
+        if (update) setAvailableUpdate(update)
+      })
+      .catch(() => undefined)
+  }, [])
+
   return (
     <div className="flex h-full flex-col">
-      <MenuBar />
+      <MenuBar availableUpdate={availableUpdate} onOpenUpdate={() => setAvailableUpdate((u) => u)} />
       <div className="flex min-h-0 flex-1">
         <ActivityBar />
-        {sidebarVisible && (activeView === 'ai' ? <ChatPanel /> : <Sidebar />)}
+        {sidebarVisible && <Sidebar />}
         {activeView === 'settings' ? <SettingsView /> : <EditorView />}
+        {/* Chat de IA: PANEL DERECHO (dock) — visible en cualquier vista central */}
+        {chatPanelVisible && <ChatPanel />}
       </div>
+      {/* Fase F: Términos y Privacidad al primer arranque (o reabrible desde Ajustes) */}
+      {(termsVisible || termsDialogOpen) && (
+        <TermsDialog
+          onAccept={() => {
+            setTermsVisible(false)
+            useUiStore.getState().setTermsDialogOpen(false)
+          }}
+        />
+      )}
       {/* Panel inferior: terminal integrada (Ctrl+J) */}
       {panelVisible && (
         <div className="flex h-56 shrink-0 flex-col border-t border-aether-border bg-aether-bg">
@@ -89,6 +119,10 @@ export default function App() {
       )}
       <StatusBar />
       {paletteOpen && <CommandPalette />}
+      {/* Fase G: overlay de actualización con progreso */}
+      {availableUpdate && (
+        <UpdateOverlay update={availableUpdate} onClose={() => setAvailableUpdate(null)} />
+      )}
     </div>
   )
 }

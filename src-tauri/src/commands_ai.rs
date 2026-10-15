@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use tauri::async_runtime::JoinHandle;
 use tauri::ipc::Channel;
 
 use crate::ai::{
@@ -6,6 +10,10 @@ use crate::ai::{
 };
 use crate::ai::list_providers as ai_list_providers;
 use crate::secrets;
+
+// Streams en curso registrados por task_id — chat_stop los aborta (Fase E:
+// botón Detener del chat)
+static RUNNING_STREAMS: Mutex<Option<HashMap<String, JoinHandle<()>>>> = Mutex::new(None);
 
 #[tauri::command]
 pub fn list_providers() -> Vec<ProviderInfo> {
@@ -42,11 +50,12 @@ pub async fn fetch_models(provider_id: String) -> Result<Vec<ModelInfo>, String>
 }
 
 #[tauri::command]
-pub async fn chat_stream(
+pub fn chat_stream(
     provider_id: String,
     model: String,
     messages: Vec<ChatMessage>,
     thinking_level: Option<ThinkingLevel>,
+    task_id: String,
     on_chunk: Channel<StreamChunk>,
 ) -> Result<(), String> {
     let provider = get_provider(&provider_id)?;
@@ -59,27 +68,57 @@ pub async fn chat_stream(
         None
     };
 
-    // Métricas: el tiempo se mide aquí, en Rust
-    let start = std::time::Instant::now();
-    let result = provider
-        .chat_stream(&model, messages, api_key, thinking_level, &on_chunk)
-        .await;
-    let elapsed_ms = start.elapsed().as_millis() as u64;
-
-    match result {
-        Ok(generated_chars) => {
-            // Tokens aproximados: ≈4 caracteres por token
-            let tokens = if generated_chars == 0 {
-                0
-            } else {
-                (generated_chars / 4).max(1)
-            };
-            let _ = on_chunk.send(StreamChunk::Metrics { elapsed_ms, tokens });
-            let _ = on_chunk.send(StreamChunk::Done);
+    // El streaming completo corre en un TASK ABORTABLE: el comando resuelve al
+    // instante (el contenido sigue llegando por el Channel) y chat_stop(task_id)
+    // mata el task para el botón Detener
+    let task_id_for_task = task_id.clone();
+    let handle = tauri::async_runtime::spawn(async move {
+        // Métricas: el tiempo se mide aquí, en Rust
+        let start = std::time::Instant::now();
+        match provider
+            .chat_stream(&model, messages, api_key, thinking_level, &on_chunk)
+            .await
+        {
+            Ok(generated_chars) => {
+                let elapsed_ms = start.elapsed().as_millis() as u64;
+                // Tokens aproximados: ≈4 caracteres por token
+                let tokens = if generated_chars == 0 {
+                    0
+                } else {
+                    (generated_chars / 4).max(1)
+                };
+                let _ = on_chunk.send(StreamChunk::Metrics { elapsed_ms, tokens });
+                let _ = on_chunk.send(StreamChunk::Done);
+            }
+            Err(message) => {
+                // El error viaja por el canal para que la UI lo muestre
+                let _ = on_chunk.send(StreamChunk::Error { message });
+                let _ = on_chunk.send(StreamChunk::Done);
+            }
         }
-        Err(message) => {
-            let _ = on_chunk.send(StreamChunk::Done);
-            return Err(message);
+
+        // Limpieza del registro al terminar el stream
+        if let Ok(mut guard) = RUNNING_STREAMS.lock() {
+            if let Some(map) = guard.as_mut() {
+                map.remove(&task_id_for_task);
+            }
+        }
+    });
+
+    if let Ok(mut guard) = RUNNING_STREAMS.lock() {
+        guard.get_or_insert_with(HashMap::new).insert(task_id, handle);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn chat_stop(task_id: String) -> Result<(), String> {
+    let mut guard = RUNNING_STREAMS
+        .lock()
+        .map_err(|_| "El lock de streams está envenenado".to_string())?;
+    if let Some(map) = guard.as_mut() {
+        if let Some(handle) = map.remove(&task_id) {
+            handle.abort();
         }
     }
     Ok(())

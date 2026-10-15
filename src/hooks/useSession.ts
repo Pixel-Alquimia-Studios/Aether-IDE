@@ -46,8 +46,11 @@ export function useSession(): void {
       if (!session || cancelled) return
 
       if (session.activeView) {
+        // 'ai' ya no es una vista central: el chat es un dock derecho
+        const restoredView =
+          session.activeView === 'ai' ? 'explorer' : (session.activeView as SidebarView)
         useUiStore.setState({
-          activeView: session.activeView as SidebarView,
+          activeView: restoredView,
           sidebarVisible: session.sidebarVisible,
         })
       }

@@ -92,6 +92,15 @@ export interface ChatParams {
   thinkingLevel?: ThinkingLevel
 }
 
+export interface ChatParams {
+  providerId: string
+  model: string
+  messages: Array<{ role: string; content: string }>
+  thinkingLevel?: ThinkingLevel
+  /** Identifica el stream para poder DETENERLO con chat_stop (Fase E) */
+  taskId?: string
+}
+
 export async function chatStream(params: ChatParams, handlers: StreamHandlers): Promise<void> {
   if (!isTauri()) {
     handlers.onError('El chat de IA requiere la app de escritorio (Tauri)')
@@ -108,11 +117,14 @@ export async function chatStream(params: ChatParams, handlers: StreamHandlers): 
     else if (chunk.type === 'error') handlers.onError(chunk.message ?? 'Error desconocido')
   }
   try {
-    await invoke('chat_stream', {
+    // El comando resuelve al instante (el stream corre en un task abortable);
+    // el contenido sigue llegando por el Channel hasta Done o cancelación
+    await invokeWithRetry<void>('chat_stream', {
       providerId: params.providerId,
       model: params.model,
       messages: params.messages,
       thinkingLevel: params.thinkingLevel ?? null,
+      taskId: params.taskId ?? null,
       onChunk: channel,
     })
   } catch (e) {

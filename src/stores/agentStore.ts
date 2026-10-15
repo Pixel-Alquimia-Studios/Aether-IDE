@@ -44,6 +44,8 @@ interface AgentState {
   error: string | null
   /** Snapshots de archivos previos a las ediciones del agente (Time Travel) */
   checkpoints: AgentCheckpoint[]
+  /** Fase E: detener el bucle del agente en el siguiente paso */
+  stopRequested: boolean
 
   setMode: (mode: 'plan' | 'agent') => void
   setPendingCommand: (label: string | null) => void
@@ -52,6 +54,7 @@ interface AgentState {
   addCheckpoint: (checkpoint: AgentCheckpoint) => void
   applyRollback: (turnIds: Set<string>) => void
   reset: () => void
+  stopAgent: () => void
   runAgent: (
     task: string,
     mentions?: MentionContext[],
@@ -68,6 +71,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
   pendingCommand: null,
   error: null,
   checkpoints: [],
+  stopRequested: false,
 
   setMode: (mode) => set({ mode }),
   setPendingCommand: (label) => set({ pendingCommand: label }),
@@ -81,6 +85,8 @@ export const useAgentStore = create<AgentState>()((set) => ({
       steps: state.steps.filter((s) => !(s.turnId && turnIds.has(s.turnId))),
     })),
   reset: () => set({ steps: [], error: null }),
+  // Fase E: el bucle del agente se detiene en el siguiente paso
+  stopAgent: () => set({ stopRequested: true }),
 
   // Bucle de razonamiento (tool loop): el frontend orquesta los pasos.
   // Con subagent (/qa, /security, /audit): tools de SOLO LECTURA y system
@@ -107,7 +113,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
     // registra la tarea como mensaje para que quede en el historial
     useChatStore.getState().ensureAgentChat(trimmed, turn)
 
-    set({ running: true, error: null })
+    set({ running: true, error: null, stopRequested: false })
 
     // Contexto: menciones @ + archivo activo del editor (automático, salvo
     // que el usuario lo haya quitado con la ✕ de la pill)
@@ -136,6 +142,24 @@ export const useAgentStore = create<AgentState>()((set) => ({
 
     try {
       for (let step = 0; step < maxSteps; step++) {
+        // Fase E: el botón Detener corta el bucle en el siguiente paso
+        if (useAgentStore.getState().stopRequested) {
+          set((state) => ({
+            steps: [
+              ...state.steps,
+              {
+                type: 'text',
+                role: 'assistant',
+                content: '⏹ Detenido por el usuario.',
+                turnId: turn,
+                ts: Date.now(),
+                botName: subagent?.botName,
+              },
+            ],
+          }))
+          void useChatStore.getState().persistActive()
+          return
+        }
         const response = await chatWithTools({
           providerId: config.providerId,
           model: config.model,
@@ -268,7 +292,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
         set({ error: message })
       }
     } finally {
-      set({ running: false })
+      set({ running: false, stopRequested: false })
     }
   },
 }))

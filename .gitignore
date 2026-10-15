@@ -27,3 +27,8 @@ dist-ssr
 Aether-tests/
 Aether-workspace/
 aether-workspace/
+
+# Claves privadas del updater
+keys/
+*.key
+!*.key.pub

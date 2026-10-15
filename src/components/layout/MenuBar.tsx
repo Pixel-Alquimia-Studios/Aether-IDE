@@ -1,10 +1,12 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type { Update } from '@tauri-apps/plugin-updater'
 
 import { pickOpenFile, pickSaveFile } from '@/lib/workspace/fs'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { useT } from '@/lib/i18n'
 
 interface MenuItem {
   id: string
@@ -15,7 +17,13 @@ interface MenuItem {
   run?: () => void
 }
 
-export function MenuBar() {
+export function MenuBar({
+  availableUpdate,
+  onOpenUpdate,
+}: {
+  availableUpdate: Update | null
+  onOpenUpdate: () => void
+}) {
   const openMenu = useUiStore((s) => s.openMenu)
   const setOpenMenu = useUiStore((s) => s.setOpenMenu)
   const autoSave = useUiStore((s) => s.autoSave)
@@ -26,6 +34,9 @@ export function MenuBar() {
   const sidebarVisible = useUiStore((s) => s.sidebarVisible)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen)
+  const chatPanelVisible = useUiStore((s) => s.chatPanelVisible)
+  const setChatPanelVisible = useUiStore((s) => s.setChatPanelVisible)
+  const t = useT()
 
   const close = (): void => setOpenMenu(null)
 
@@ -37,12 +48,12 @@ export function MenuBar() {
   const fileMenu: MenuItem[] = [
     {
       id: 'new-file',
-      label: 'New File',
+      label: t('menu.newFile'),
       run: () => void useEditorStore.getState().openUntitledFile(),
     },
     {
       id: 'open-file',
-      label: 'Open File...',
+      label: t('menu.openFile'),
       run: () => {
         void (async () => {
           const path = await pickOpenFile()
@@ -52,13 +63,13 @@ export function MenuBar() {
     },
     {
       id: 'open-folder',
-      label: 'Open Folder...',
+      label: t('menu.openFolder'),
       run: () => void useWorkspaceStore.getState().openWorkspace(),
     },
     { id: 'sep-1', label: '', separator: true },
     {
       id: 'save',
-      label: 'Save',
+      label: t('menu.save'),
       shortcut: 'Ctrl+S',
       run: () => {
         // saveTab fuerza Save As para pestañas untitled (misma ruta que Ctrl+S)
@@ -68,12 +79,12 @@ export function MenuBar() {
     },
     {
       id: 'save-as',
-      label: 'Save As...',
+      label: t('menu.saveAs'),
       run: () => {
         void (async () => {
           const { activeTabId, saveTabAs, tabs } = useEditorStore.getState()
           if (!activeTabId) return
-          const tab = tabs.find((t) => t.id === activeTabId)
+          const tab = tabs.find((tabItem) => tabItem.id === activeTabId)
           const newPath = await pickSaveFile(tab?.title)
           if (newPath) void saveTabAs(activeTabId, newPath)
         })()
@@ -82,19 +93,19 @@ export function MenuBar() {
     { id: 'sep-2', label: '', separator: true },
     {
       id: 'auto-save',
-      label: 'Auto Save',
+      label: t('menu.autoSave'),
       checked: autoSave,
       run: () => toggleAutoSave(),
     },
     { id: 'sep-3', label: '', separator: true },
     {
       id: 'preferences',
-      label: 'Preferences',
+      label: t('menu.preferences'),
       run: () => showView('settings'),
     },
     {
       id: 'exit',
-      label: 'Exit',
+      label: t('menu.exit'),
       run: () => {
         if (isTauri()) void invoke('exit_app')
       },
@@ -104,29 +115,38 @@ export function MenuBar() {
   const viewMenu: MenuItem[] = [
     {
       id: 'terminal',
-      label: 'Terminal Integrada',
+      label: t('menu.terminal'),
       shortcut: 'Ctrl+J',
       checked: panelVisible,
       run: () => togglePanel(),
     },
     {
       id: 'sidebar',
-      label: 'Barra Lateral',
+      label: t('menu.sidebar'),
       shortcut: 'Ctrl+B',
       checked: sidebarVisible,
       run: () => toggleSidebar(),
     },
     {
+      id: 'ai-chat',
+      label: t('side.ai'),
+      checked: chatPanelVisible,
+      run: () => {
+        const current = useUiStore.getState().chatPanelVisible
+        useUiStore.setState({ chatPanelVisible: !current })
+      },
+    },
+    {
       id: 'palette',
-      label: 'Command Palette',
+      label: t('menu.palette'),
       shortcut: 'Ctrl+Shift+P',
       run: () => setPaletteOpen(true),
     },
   ]
 
   const menus: Array<{ id: string; label: string; items: MenuItem[] }> = [
-    { id: 'file', label: 'Archivo', items: fileMenu },
-    { id: 'view', label: 'Ver', items: viewMenu },
+    { id: 'file', label: t('menu.file'), items: fileMenu },
+    { id: 'view', label: t('menu.view'), items: viewMenu },
   ]
 
   const handleKeyDown = (e: ReactKeyboardEvent): void => {
@@ -187,7 +207,37 @@ export function MenuBar() {
 
       <span className="ml-2 truncate text-[12px] text-aether-text-dim">Aether IDE</span>
       <span className="flex-1" />
-      <span className="pr-2 text-[10px] text-aether-text-dim">v0.1.4</span>
+      {/* 💬 Chat de IA: panel derecho (toggle en la upbar) */}
+      <button
+        title={t('side.ai')}
+        onClick={() => setChatPanelVisible(!chatPanelVisible)}
+        className={`rounded px-2 py-1 text-[14px] transition-colors ${
+          chatPanelVisible
+            ? 'bg-aether-accent/15 text-aether-accent'
+            : 'text-aether-text-dim hover:bg-white/10 hover:text-aether-text'
+        }`}
+      >
+        💬
+      </button>
+      {/* Engranaje de Ajustes: esquina superior derecha */}
+      <button
+        title={t('menu.settings')}
+        onClick={() => showView('settings')}
+        className="rounded px-2 py-1 text-[14px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-aether-text"
+      >
+        ⚙️
+      </button>
+      <span className="pr-2 text-[10px] text-aether-text-dim">v0.2.0</span>
+      {/* Fase G: botón de actualización disponible (esquina superior derecha) */}
+      {availableUpdate && (
+        <button
+          title={`Actualizar a v${availableUpdate.version}`}
+          onClick={onOpenUpdate}
+          className="mr-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-0.5 text-[11px] font-medium text-emerald-400 hover:bg-emerald-500/20"
+        >
+          ⬆ Actualizar
+        </button>
+      )}
     </div>
   )
 }

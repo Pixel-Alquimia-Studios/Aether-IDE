@@ -21,10 +21,12 @@ export const COMMANDS: Command[] = [
     run: () => useUiStore.getState().showView('search'),
   },
   {
-    id: 'view.ai',
-    title: 'Mostrar AI Chat',
-    category: 'Ver',
-    run: () => useUiStore.getState().showView('ai'),
+        id: 'view.ai',
+        title: 'AI Chat',
+        run: () => {
+          const ui = useUiStore.getState()
+          ui.setChatPanelVisible(!ui.chatPanelVisible)
+        },
   },
   {
     id: 'view.settings',

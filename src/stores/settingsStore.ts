@@ -2,11 +2,33 @@ import { isTauri } from '@tauri-apps/api/core'
 import { create } from 'zustand'
 
 import { deleteApiKey, fetchModels, hasApiKey, listProviders, saveApiKey } from '@/lib/ai/api'
+import { detectLanguage, type Language } from '@/lib/i18n'
 import type { ModelInfo, ProviderInfo } from '@/types/ai'
 
 // Persistencia local de modelos obtenidos (dev en navegador; en desktop la
 // sesión de Tauri guarda fetchedModels en session.json)
 const FETCHED_MODELS_KEY = 'aether-ide-fetched-models'
+const LANGUAGE_KEY = 'aether-ide-language'
+
+function loadPersistedLanguage(): Language {
+  // 1. Override manual del usuario (persistido)
+  try {
+    const raw = localStorage.getItem(LANGUAGE_KEY)
+    if (raw === 'es' || raw === 'en') return raw
+  } catch {
+    // localStorage no disponible
+  }
+  // 2. Idioma del SO (es-* → Español latino, si no Inglés)
+  return detectLanguage()
+}
+
+function persistLanguage(language: Language): void {
+  try {
+    localStorage.setItem(LANGUAGE_KEY, language)
+  } catch {
+    // localStorage no disponible
+  }
+}
 
 function loadPersistedFetchedModels(): Record<string, ModelInfo[]> {
   if (isTauri()) return {}
@@ -40,7 +62,10 @@ interface SettingsState {
   fetchedModels: Record<string, ModelInfo[]>
   fetchingModels: Record<string, boolean>
   fetchModelsError: Record<string, string>
+  /** Idioma de la UI (arranque auto por SO + override manual) */
+  language: Language
 
+  setLanguage: (language: Language) => void
   loadProviders: () => Promise<void>
   selectProvider: (id: string) => void
   setModel: (providerId: string, model: string) => void
@@ -59,6 +84,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   fetchedModels: loadPersistedFetchedModels(),
   fetchingModels: {},
   fetchModelsError: {},
+  language: loadPersistedLanguage(),
+
+  setLanguage: (language) => {
+    persistLanguage(language)
+    set({ language })
+  },
 
   loadProviders: async () => {
     set({ loading: true, error: null })

@@ -13,6 +13,10 @@ interface UiState {
   autoSave: boolean
   /** Menú desplegable abierto (null = cerrado) */
   openMenu: string | null
+  /** Panel DERECHO del chat visible (se cierra con ✕ en su cabecera) */
+  chatPanelVisible: boolean
+  /** Diálogo de Términos y Privacidad abierto (reabrible desde Ajustes) */
+  termsDialogOpen: boolean
 
   setActiveView: (view: SidebarView) => void
   showView: (view: SidebarView) => void
@@ -22,6 +26,8 @@ interface UiState {
   setInlineEditOpen: (open: boolean) => void
   toggleAutoSave: () => void
   setOpenMenu: (menu: string | null) => void
+  setChatPanelVisible: (open: boolean) => void
+  setTermsDialogOpen: (open: boolean) => void
 }
 
 export const useUiStore = create<UiState>()((set) => ({
@@ -32,6 +38,8 @@ export const useUiStore = create<UiState>()((set) => ({
   inlineEditOpen: false,
   autoSave: false,
   openMenu: null,
+  chatPanelVisible: true,
+  termsDialogOpen: false,
 
   // Si se pulsa el icono de la vista ya activa, colapsa la sidebar (comportamiento VS Code)
   setActiveView: (view) =>
@@ -48,4 +56,6 @@ export const useUiStore = create<UiState>()((set) => ({
   setInlineEditOpen: (open) => set({ inlineEditOpen: open }),
   toggleAutoSave: () => set((state) => ({ autoSave: !state.autoSave })),
   setOpenMenu: (menu) => set({ openMenu: menu }),
+  setChatPanelVisible: (open) => set({ chatPanelVisible: open }),
+  setTermsDialogOpen: (open) => set({ termsDialogOpen: open }),
 }))

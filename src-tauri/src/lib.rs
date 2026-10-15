@@ -8,6 +8,7 @@ mod secrets;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::read_file_range,
@@ -37,6 +38,7 @@ pub fn run() {
             commands_ai::delete_api_key,
             commands_ai::fetch_models,
             commands_ai::chat_stream,
+            commands_ai::chat_stop,
             commands_ai::inline_completion,
             commands_ai::chat_with_tools,
             chat_history::create_chat,

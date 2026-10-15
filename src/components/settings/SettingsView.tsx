@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
+import { useT } from '@/lib/i18n'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useUiStore } from '@/stores/uiStore'
 import type { ProviderInfo } from '@/types/ai'
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -16,79 +18,150 @@ function formatTokens(n: number | null): string {
   return `${Math.round(n / 1000)}k`
 }
 
+type SettingsSection = 'general' | 'providers'
+
 export function SettingsView() {
-  const providers = useSettingsStore((s) => s.providers)
-  const loading = useSettingsStore((s) => s.loading)
-  const error = useSettingsStore((s) => s.error)
-  const selectedProviderId = useSettingsStore((s) => s.selectedProviderId)
-  const keyConfigured = useSettingsStore((s) => s.keyConfigured)
-  const loadProviders = useSettingsStore((s) => s.loadProviders)
-  const selectProvider = useSettingsStore((s) => s.selectProvider)
-
-  const selected = providers.find((p) => p.id === selectedProviderId) ?? null
-
-  useEffect(() => {
-    void loadProviders()
-  }, [loadProviders])
+  const [section, setSection] = useState<SettingsSection>('general')
+  const t = useT()
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="border-b border-aether-border px-6 py-4">
-        <h1 className="text-base font-semibold text-aether-text">Ajustes</h1>
-        <p className="mt-1 text-[13px] text-aether-text-dim">
-          Gestiona proveedores de IA, claves de API y el modelo activo
-        </p>
+        <h1 className="text-base font-semibold text-aether-text">{t('settings.title')}</h1>
+        <p className="mt-1 text-[13px] text-aether-text-dim">{t('settings.subtitle')}</p>
       </div>
       <div className="flex min-h-0 flex-1">
-        {/* Lista de proveedores */}
-        <div className="w-72 shrink-0 overflow-y-auto border-r border-aether-border p-2">
-          {loading && <p className="px-2 py-1 text-[13px] text-aether-text-dim">Cargando…</p>}
-          {error && <p className="px-2 py-1 text-xs text-red-400">{error}</p>}
-          {providers.map((provider) => {
-            const isSelected = provider.id === selectedProviderId
-            const badge = provider.requiresKey
-              ? keyConfigured[provider.id]
-                ? '✓ clave'
-                : 'sin clave'
-              : 'local'
-            return (
-              <button
-                key={provider.id}
-                onClick={() => selectProvider(provider.id)}
-                className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-[13px] ${
-                  isSelected
-                    ? 'bg-aether-accent/20 text-white'
-                    : 'text-aether-text hover:bg-white/5'
-                }`}
-              >
-                <span className="truncate">{provider.name}</span>
-                <span
-                  className={`shrink-0 text-[10px] ${
-                    badge === 'sin clave' ? 'text-red-400' : 'text-aether-text-dim'
-                  }`}
-                >
-                  {badge}
-                </span>
-              </button>
-            )
-          })}
+        <div className="w-56 shrink-0 border-r border-aether-border p-2">
+          <button
+            onClick={() => setSection('general')}
+            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] ${
+              section === 'general'
+                ? 'bg-aether-accent/20 text-white'
+                : 'text-aether-text hover:bg-white/5'
+            }`}
+          >
+            ⚙️ {t('settings.general')}
+          </button>
+          <button
+            onClick={() => setSection('providers')}
+            className={`mt-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] ${
+              section === 'providers'
+                ? 'bg-aether-accent/20 text-white'
+                : 'text-aether-text hover:bg-white/5'
+            }`}
+          >
+            🔌 {t('settings.providers')}
+          </button>
         </div>
-
-        {/* Detalle del proveedor seleccionado */}
-        {selected ? (
-          <ProviderDetail key={selected.id} provider={selected} />
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-[13px] text-aether-text-dim">
-            Selecciona un proveedor de la lista
-          </div>
-        )}
+        {section === 'general' ? <GeneralSection /> : <ProvidersSection />}
       </div>
     </div>
   )
 }
 
-// Componente separado con estado propio: con key={provider.id} en el padre se
-// reinicializa al cambiar de proveedor, sin effects ni setState en render.
+function GeneralSection() {
+  const language = useSettingsStore((s) => s.language)
+  const setLanguage = useSettingsStore((s) => s.setLanguage)
+  const autoSave = useUiStore((s) => s.autoSave)
+  const toggleAutoSave = useUiStore((s) => s.toggleAutoSave)
+  const setTermsDialogOpen = useUiStore((s) => s.setTermsDialogOpen)
+  const t = useT()
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <section>
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
+          {t('settings.language')}
+        </label>
+        <div className="mt-2">
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as 'es' | 'en')}
+            className="w-80 rounded border border-aether-border bg-aether-bg px-3 py-1.5 text-[13px] text-aether-text outline-none focus:border-aether-accent"
+          >
+            <option value="es">{t('settings.languageEs')}</option>
+            <option value="en">{t('settings.languageEn')}</option>
+          </select>
+        </div>
+      </section>
+      <section className="mt-6">
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
+          {t('menu.autoSave')}
+        </label>
+        <div className="mt-2">
+          <button
+            onClick={() => toggleAutoSave()}
+            className={`rounded border px-3 py-1.5 text-[12px] font-medium ${
+              autoSave
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                : 'border-aether-border text-aether-text-dim hover:bg-white/5'
+            }`}
+          >
+            {autoSave ? '✓ ON' : 'OFF'}
+          </button>
+        </div>
+      </section>
+      <section className="mt-6">
+        <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
+          {t('terms.dialogTitle')}
+        </label>
+        <div className="mt-2">
+          <button
+            onClick={() => setTermsDialogOpen(true)}
+            className="rounded border border-aether-border px-3 py-1.5 text-[12px] text-aether-text-dim hover:bg-white/5"
+          >
+            📄 {t('terms.dialogTitle')}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ProvidersSection() {
+  const providers = useSettingsStore((s) => s.providers)
+  const selectedProviderId = useSettingsStore((s) => s.selectedProviderId)
+  const keyConfigured = useSettingsStore((s) => s.keyConfigured)
+  const selectProvider = useSettingsStore((s) => s.selectProvider)
+  const t = useT()
+
+  const selected = providers.find((p) => p.id === selectedProviderId) ?? null
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex flex-wrap items-center gap-1 border-b border-aether-border px-3 py-2">
+        {providers.map((provider) => {
+          const badge = provider.requiresKey
+            ? keyConfigured[provider.id]
+              ? '✓'
+              : '·'
+            : 'local'
+          return (
+            <button
+              key={provider.id}
+              onClick={() => selectProvider(provider.id)}
+              className={`rounded px-2 py-1 text-[12px] ${
+                provider.id === selectedProviderId
+                  ? 'bg-aether-accent/20 font-medium text-white'
+                  : 'text-aether-text-dim hover:bg-white/5'
+              }`}
+            >
+              {provider.name} {badge}
+            </button>
+          )
+        })}
+      </div>
+      {selected ? (
+        <ProviderDetail key={selected.id} provider={selected} />
+      ) : (
+        <div className="flex flex-1 items-center justify-center text-[13px] text-aether-text-dim">
+          {t('settings.noProvider')}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const modelByProvider = useSettingsStore((s) => s.modelByProvider)
   const keyConfigured = useSettingsStore((s) => s.keyConfigured)
@@ -99,13 +172,19 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const saveKey = useSettingsStore((s) => s.saveKey)
   const deleteKey = useSettingsStore((s) => s.deleteKey)
   const fetchModels = useSettingsStore((s) => s.fetchModels)
+  const t = useT()
 
+  const model = modelByProvider[provider.id] ?? ''
   const isConfigured = keyConfigured[provider.id] ?? false
 
   const models = fetchedModels[provider.id]?.length
     ? fetchedModels[provider.id]
     : provider.defaultModels
+  const isFetching = fetchingModels[provider.id] ?? false
   const [apiKeyInput, setApiKeyInput] = useState('')
+
+  const effectiveModel = model || models[0]?.id || provider.defaultModels[0]?.id
+  const modelInfo = models.find((m) => m.id === effectiveModel) ?? models[0]
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -114,19 +193,18 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
         <p className="mt-1 font-mono text-xs text-aether-text-dim">{provider.baseUrl}</p>
       </div>
 
-      {/* Modelo activo */}
       <section className="mt-6">
         <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
-          Modelo activo
+          {t('settings.activeModel')}
         </label>
         <div className="mt-2 flex flex-col gap-2">
           <select
-            value={modelByProvider[provider.id] ?? models[0]?.id ?? ''}
+            value={models.some((m) => m.id === effectiveModel) ? effectiveModel : ''}
             onChange={(e) => setModel(provider.id, e.target.value)}
             className="w-80 rounded border border-aether-border bg-aether-bg px-3 py-1.5 text-[13px] text-aether-text outline-none focus:border-aether-accent"
           >
             <option value="" disabled>
-              Elegir modelo…
+              {t('settings.pickModel')}
             </option>
             {models.map((m) => (
               <option key={m.id} value={m.id}>
@@ -138,7 +216,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
             <input
               value={modelByProvider[provider.id] ?? ''}
               onChange={(e) => setModel(provider.id, e.target.value)}
-              placeholder="…o escribe un model ID personalizado"
+              placeholder={t('settings.customModel')}
               className="w-80 rounded border border-aether-border bg-aether-bg px-3 py-1.5 text-[13px] text-aether-text outline-none placeholder:text-aether-text-dim focus:border-aether-accent"
             />
             <button
@@ -146,32 +224,26 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
               disabled={provider.requiresKey && !keyConfigured[provider.id]}
               className="rounded border border-aether-border px-3 py-1.5 text-[13px] text-aether-text-dim hover:bg-white/5 disabled:opacity-40"
             >
-              {fetchingModels[provider.id] ? 'Cargando…' : '↻ Refrescar modelos'}
+              {isFetching ? t('settings.loadingModels') : t('settings.refreshModels')}
             </button>
           </div>
           {fetchModelsError[provider.id] && (
             <p className="text-xs text-red-400">{fetchModelsError[provider.id]}</p>
           )}
-          {(() => {
-            const firstModel = models[0]?.id ?? provider.defaultModels[0]?.id ?? ''
-            const modelInfo = models.find((m) => m.id === firstModel) ?? models[0]
-            if (!modelInfo) return null
-            return (
-              <p className="mt-2 text-[11px] text-aether-text-dim">
-                {modelInfo.maxContextTokens && `${formatTokens(modelInfo.maxContextTokens)} tokens`}
-                {modelInfo.modalities.length > 0 && (
-                  <span> | {modelInfo.modalities.map((m) => MODALITY_LABELS[m] ?? m).join(' + ')}</span>
-                )}
-              </p>
-            )
-          })()}
+          {modelInfo && (
+            <p className="mt-2 text-[11px] text-aether-text-dim">
+              {modelInfo.maxContextTokens && `${formatTokens(modelInfo.maxContextTokens)} tokens`}
+              {modelInfo.modalities.length > 0 && (
+                <span> | {modelInfo.modalities.map((m) => MODALITY_LABELS[m] ?? m).join(' + ')}</span>
+              )}
+            </p>
+          )}
         </div>
       </section>
 
-      {/* API Key */}
       <section className="mt-6">
         <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
-          API Key
+          {t('settings.apiKey')}
         </label>
         {provider.requiresKey ? (
           <div className="mt-2">
@@ -182,14 +254,14 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                   : 'bg-red-500/15 text-red-400'
               }`}
             >
-              {isConfigured ? 'Configurada en el keychain del SO' : 'No configurada'}
+              {isConfigured ? t('settings.keyConfigured') : t('settings.keyNotConfigured')}
             </span>
             <div className="mt-3 flex max-w-xl gap-2">
               <input
                 type="password"
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="Pega tu API key…"
+                placeholder={t('settings.pasteKey')}
                 className="flex-1 rounded border border-aether-border bg-aether-bg px-3 py-1.5 font-mono text-[13px] text-aether-text outline-none placeholder:text-aether-text-dim focus:border-aether-accent"
               />
               <button
@@ -200,27 +272,23 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                 }}
                 className="rounded bg-aether-accent px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
               >
-                Guardar
+                {t('settings.save')}
               </button>
               {isConfigured && (
                 <button
                   onClick={() => void deleteKey(provider.id)}
                   className="rounded border border-aether-border px-3 py-1.5 text-[13px] text-aether-text-dim hover:bg-white/5"
                 >
-                  Borrar
+                  {t('settings.delete')}
                 </button>
               )}
             </div>
             <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-aether-text-dim">
-              La clave se guarda en el keychain del sistema operativo (Credential Manager en
-              Windows, Keychain en macOS). Nunca se escribe en archivos planos ni se expone al
-              frontend.
+              {t('settings.keychainNote')}
             </p>
           </div>
         ) : (
-          <p className="mt-2 text-[13px] text-aether-text-dim">
-            Proveedor local — no requiere API key.
-          </p>
+          <p className="mt-2 text-[13px] text-aether-text-dim">{t('settings.localProvider')}</p>
         )}
       </section>
     </div>

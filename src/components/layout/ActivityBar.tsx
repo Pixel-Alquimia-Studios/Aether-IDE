@@ -1,22 +1,28 @@
 import { useUiStore, type SidebarView } from '@/stores/uiStore'
+import { useT } from '@/lib/i18n'
 
-const VIEWS: Array<{ id: SidebarView; icon: string; title: string; group: number }> = [
-  { id: 'explorer', icon: '📁', title: 'Explorer', group: 1 },
-  { id: 'search', icon: '🔍', title: 'Search', group: 1 },
-  { id: 'git', icon: '🌿', title: 'Source Control', group: 1 },
-  { id: 'extensions', icon: '🧩', title: 'Extensions', group: 1 },
-  { id: 'ai', icon: '💬', title: 'AI Chat', group: 2 },
-  { id: 'settings', icon: '⚙️', title: 'Settings', group: 3 },
+const VIEWS: Array<{ id: SidebarView; icon: string; group: number }> = [
+  { id: 'explorer', icon: '📁', group: 1 },
+  { id: 'search', icon: '🔍', group: 1 },
+  { id: 'git', icon: '🌿', group: 1 },
+  { id: 'extensions', icon: '🧩', group: 1 },
 ]
+
+const SIDEBAR_TITLE_KEYS = {
+  explorer: 'side.explorer',
+  search: 'side.search',
+  git: 'side.git',
+  extensions: 'side.extensions',
+} as const
 
 export function ActivityBar() {
   const activeView = useUiStore((s) => s.activeView)
   const sidebarVisible = useUiStore((s) => s.sidebarVisible)
   const setActiveView = useUiStore((s) => s.setActiveView)
+  const t = useT()
 
   return (
     <div className="flex w-12 flex-col items-center border-r border-aether-border bg-aether-surface py-2">
-      {/* Logo */}
       <div
         title="Aether IDE"
         className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-aether-accent/15 text-lg text-aether-accent"
@@ -25,23 +31,21 @@ export function ActivityBar() {
       </div>
 
       {VIEWS.map((view, i) => {
-        const isActive = sidebarVisible && activeView === view.id
         const prevGroup = i > 0 ? VIEWS[i - 1].group : 0
         const showSeparator = prevGroup !== 0 && view.group !== prevGroup
         return (
           <div key={view.id} className="flex w-full flex-col items-center">
             {showSeparator && <div className="my-1.5 h-px w-6 bg-white/[0.07]" />}
             <button
-              title={view.title}
+              title={t(SIDEBAR_TITLE_KEYS[view.id as keyof typeof SIDEBAR_TITLE_KEYS])}
               onClick={() => setActiveView(view.id)}
               className={`relative flex h-10 w-10 items-center justify-center rounded-lg text-lg transition-all ${
-                isActive
+                sidebarVisible && activeView === view.id
                   ? 'bg-white/[0.08] text-white'
                   : 'text-aether-text-dim hover:bg-white/[0.04] hover:text-aether-text'
               }`}
             >
-              {/* Barra indicadora lateral (estilo VS Code) */}
-              {isActive && (
+              {sidebarVisible && activeView === view.id && (
                 <span className="absolute left-[-8px] h-5 w-0.5 rounded-full bg-aether-accent" />
               )}
               {view.icon}

@@ -6,7 +6,7 @@
 
 React + TypeScript · Rust (Tauri v2) · Monaco Editor
 
-[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.1.4-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
+[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.2.0-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
@@ -47,7 +47,15 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.1.4 *(actual)*
+### v0.2.0 *(actual)*
+
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.2.0-x64-portable.exe](downloads/0.2.0/aether-ide-0.2.0-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 11,7 MB |
+| [aether-ide-0.2.0-x64-setup.exe](downloads/0.2.0/aether-ide-0.2.0-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,61 MB |
+| [aether-ide-0.2.0-x64.msi](downloads/0.2.0/aether-ide-0.2.0-x64.msi) | Instalador MSI (Windows x64) | 6,61 MB |
+
+### v0.1.4
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
@@ -81,6 +89,28 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.2.0
+
+**Añadido**
+- **i18n bilingüe** (Español latino / Inglés): detección automática por SO + override manual en Ajustes → General
+- **Ajustes reestructurado** con navegación lateral: General (Idioma, Auto Save) / Proveedores (API keys, modelos, fetch)
+- **Chat de IA como panel derecho cerrable** (dock): coexiste con el Explorer, con botón 💬 en la barra superior
+- **Selector de modo en botón desplegable** (Plan / Agente) en la cabecera del chat
+- **Botón ■ Detener**: aborta el stream del chat y el bucle del agente en el siguiente paso (`chat_stop` en Rust con task abortable)
+- **Subagentes con identidad propia**: 🐛 BugBot (/qa), 🛡 SecBot (/security), 📋 AuditBot (/audit) — análisis de solo lectura con reporte de hallazgos
+- **Lectura de archivos por secciones** (`read_file_range` en Rust) para análisis de archivos grandes sin truncados
+- **Sistema de actualizaciones automáticas** (tauri-plugin-updater): verificación al abrir, botón ⬆ en la barra superior, overlay con progreso
+- **Instalador NSIS personalizado**: selector de idioma, imágenes de branding, Aether IDE en el wizard
+- **Documentos legales**: Política de Privacidad y Términos de Servicio (docs/PRIVACY.md, docs/TERMS.md) con diálogo de aceptación al primer arranque
+- Engranaje ⚙️ de Ajustes en la esquina superior derecha del MenuBar
+
+**Corregido**
+- Truncado de archivos al escribir con el agente: validación estricta de argumentos (`__truncated` marker) — el archivo ya no se vacía si el modelo corta la respuesta
+- Chats aislados por workspace: cada carpeta tiene su propio historial (el chat activo se guarda y limpia al cambiar de proyecto)
+- Carreras de búsqueda y detalle en el marketplace de extensiones
+- `ResizeObserver` (Monaco/xterm) silenciado globalmente y con cancelación correcta
+- El 💬 de la ActivityBar ya no depende de `activeView`: es un toggle puro del dock derecho
 
 ### v0.1.4
 

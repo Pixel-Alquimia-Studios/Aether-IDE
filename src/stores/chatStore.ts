@@ -1,6 +1,8 @@
+import { invoke } from '@tauri-apps/api/core'
 import { create } from 'zustand'
 
 import { chatStream } from '@/lib/ai/api'
+import { tSync } from '@/lib/i18n'
 import { buildContextBlock, getActiveEditorContext, resolveMentions } from '@/lib/ai/context'
 import { deleteChat as deleteChatApi, listChats, loadChat as loadChatApi, saveChat as saveChatApi } from '@/lib/ai/chats'
 import { getActiveProviderConfig } from '@/stores/settingsStore'
@@ -21,6 +23,8 @@ interface ChatState {
   error: string | null
   /** Default "Medium" */
   thinkingLevel: ThinkingLevel
+  /** Task del stream en curso (para el botón Detener / Fase E) */
+  activeStreamTaskId: string | null
 
   setThinkingLevel: (level: ThinkingLevel) => void
   refreshHistory: () => Promise<void>
@@ -31,6 +35,8 @@ interface ChatState {
   ensureAgentChat: (task: string, turnId: string) => void
   /** Limpia el chat activo (al cambiar de workspace tras guardar) */
   clearActiveChat: () => void
+  /** Detiene el stream en curso (botón Detener — Fase E) */
+  cancelStream: () => void
   sendMessage: (text: string, mentions?: MentionContext[], options?: { includeAutoContext?: boolean }) => Promise<void>
   applyRollback: (turnIds: Set<string>) => void
   resumeChat: (id: string) => Promise<void>
@@ -86,8 +92,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   statusText: null,
   error: null,
   thinkingLevel: 'medium',
+  activeStreamTaskId: null,
 
   setThinkingLevel: (level) => set({ thinkingLevel: level }),
+
+  // Fase E: DETENER — aborta el task del stream en Rust (chat_stop) y corta
+  // la UI al instante. El contenido parcial del assistant queda en el chat.
+  cancelStream: () => {
+    const taskId = get().activeStreamTaskId
+    if (taskId) {
+      void invoke('chat_stop', { taskId }).catch(() => undefined)
+    }
+    set({
+      activeStreamTaskId: null,
+      streaming: false,
+      statusText: '⏹ ' + tSync('chat.detenido'),
+    })
+  },
 
   // Time Travel: trunca el chat desde el primer mensaje cuyo turno fue
   // revertido (los archivos los restaura rollback.ts vía los checkpoints)
@@ -188,8 +209,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       { role: 'user', content: userPayload },
     ]
 
-    // Turno asociado a este mensaje (para Time Travel / rollback)
+    // Turno asociado a este mensaje (para Time Travel / rollback) + taskId del
+    // stream (para el botón Detener)
     const turnId = `turn-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    const streamTaskId = `stream-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
     const now = Date.now()
 
@@ -202,6 +225,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       streaming: true,
       statusText: null,
       error: null,
+      activeStreamTaskId: streamTaskId,
     }))
 
     // Persist inmediato: el mensaje del usuario sobrevive a un reload de HMR
@@ -215,6 +239,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         model: config.model,
         messages: history,
         thinkingLevel: get().thinkingLevel,
+        taskId: streamTaskId,
       },
       {
         onDelta: (delta) => {
@@ -244,10 +269,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           }))
         },
         onDone: () => {
-          set({ streaming: false, statusText: null })
+          set({ streaming: false, statusText: null, activeStreamTaskId: null })
           void persist(get).then(() => get().refreshHistory())
         },
-        onError: (message) => set({ streaming: false, error: message }),
+        onError: (message) => {
+          set({
+            streaming: false,
+            error: get().statusText?.includes('⏹') ? null : message,
+            activeStreamTaskId: null,
+          })
+        },
         onStatus: (status) => set({ statusText: status }),
         onMetrics: (elapsedMs, tokens) =>
           set((state) => ({

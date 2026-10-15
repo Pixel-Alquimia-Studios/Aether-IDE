@@ -7,10 +7,12 @@ import { ThinkingBlock } from '@/components/ai/ThinkingBlock'
 import { collectTurnIdsFrom, rollbackTurns } from '@/lib/agent/rollback'
 import { detectSubagent, SUBAGENTS } from '@/lib/agent/subagents'
 import { fuzzyScore } from '@/lib/commands/fuzzy'
+import { useT } from '@/lib/i18n'
 import { useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useUiStore } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ChatMessage, MentionContext, ThinkingLevel } from '@/types/chat'
 import type { AgentStep } from '@/types/agent'
@@ -93,7 +95,10 @@ export function ChatPanel() {
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentions, setMentions] = useState<MentionContext[]>([])
   const [autoContextEnabled, setAutoContextEnabled] = useState(true)
+  const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const t = useT()
+  const setChatPanelVisible = useUiStore((s) => s.setChatPanelVisible)
 
   // Timeline unificado: mensajes del chat + pasos del agente, ordenados por ts
   const timeline = useMemo<TimelineItem[]>(() => {
@@ -275,11 +280,11 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
-      {/* Historial de chats: nuevo / reanudar / renombrar / eliminar */}
+    <div className="flex h-full w-[380px] shrink-0 flex-col border-l border-aether-border bg-aether-bg">
+      {/* Historial de chats: nuevo / reanudar / renombrar / eliminar + ✕ cerrar */}
       <div className="flex items-center gap-1.5 border-b border-aether-border bg-aether-surface px-2 py-1.5">
         <button
-          title="Nuevo chat"
+          title={t('chat.newChat')}
           onClick={() => void newChat()}
           disabled={streaming || agentRunning}
           className="rounded px-2 py-1 text-[13px] text-aether-text hover:bg-white/10 disabled:opacity-40"
@@ -312,12 +317,19 @@ export function ChatPanel() {
           ✎
         </button>
         <button
-          title="Eliminar chat"
+          title={t('chat.deleteChat')}
           onClick={() => chatId && void deleteChatAction(chatId)}
           disabled={!chatId || streaming || agentRunning}
           className="rounded px-1.5 py-1 text-[12px] text-aether-text-dim hover:bg-white/10 disabled:opacity-40"
         >
           🗑
+        </button>
+        <button
+          title={t('chat.close')}
+          onClick={() => setChatPanelVisible(false)}
+          className="rounded px-1.5 py-1 text-[12px] text-aether-text-dim hover:bg-white/10"
+        >
+          ✕
         </button>
       </div>
       {renaming && chatId && (
@@ -382,21 +394,37 @@ export function ChatPanel() {
           </select>
         </div>
         <div className="mt-1.5 flex items-center gap-2">
-          {/* Toggle Plan / Agente */}
-          <div className="flex shrink-0 rounded border border-aether-border p-0.5">
-            {(['plan', 'agent'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setAgentMode(m)}
-                className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
-                  agentMode === m
-                    ? 'bg-aether-accent/25 font-medium text-white'
-                    : 'text-aether-text-dim hover:text-aether-text'
-                }`}
-              >
-                {m === 'plan' ? '📝 Plan' : '🤖 Agente'}
-              </button>
-            ))}
+          {/* Selector de modo: botón único desplegable (Plan / Agente) */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setModeMenuOpen(!modeMenuOpen)}
+              className="flex items-center gap-1 rounded border border-aether-border bg-aether-bg px-2 py-1 text-[11px] font-medium text-aether-text"
+            >
+              {agentMode === 'agent' ? '🤖 Agente' : '📝 Plan'}
+              <span className="text-[8px]">▾</span>
+            </button>
+            {modeMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />
+                <div className="absolute bottom-full left-0 z-50 mb-1 w-40 overflow-hidden rounded-lg border border-aether-border bg-aether-surface py-1 shadow-2xl">
+                  {(['plan', 'agent'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => {
+                        setAgentMode(m)
+                        setModeMenuOpen(false)
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-aether-text hover:bg-aether-accent/20"
+                    >
+                      <span className="w-4 text-center text-[11px] text-aether-text-dim">
+                        {agentMode === m ? '✓' : ''}
+                      </span>
+                      {m === 'plan' ? `📝 ${t('chat.plan')}` : `🤖 ${t('chat.agent')}`}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
           <select
             value={thinkingLevel}
@@ -668,6 +696,19 @@ export function ChatPanel() {
             disabled={streaming || (agentMode === 'agent' && agentRunning)}
             className="flex-1 resize-none rounded border border-aether-border bg-aether-bg px-3 py-2 text-[13px] outline-none focus:border-aether-accent disabled:opacity-50"
           />
+          {/* Fase E: botón Detener (rojo) mientras hay trabajo en curso */}
+          {(streaming || (agentMode === 'agent' && agentRunning)) && (
+            <button
+              title={t('chat.stop')}
+              onClick={() => {
+                void useChatStore.getState().cancelStream()
+                useAgentStore.getState().stopAgent()
+              }}
+              className="rounded border border-red-500/40 px-3 py-2 text-[13px] font-medium text-red-400 hover:bg-red-500/10"
+            >
+              ■
+            </button>
+          )}
           <button
             onClick={send}
             disabled={
