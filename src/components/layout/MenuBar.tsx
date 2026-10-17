@@ -2,6 +2,8 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Update } from '@tauri-apps/plugin-updater'
 
+import pkg from '../../../package.json'
+
 import { pickOpenFile, pickSaveFile } from '@/lib/workspace/fs'
 import { useEditorStore } from '@/stores/editorStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -227,7 +229,7 @@ export function MenuBar({
       >
         ⚙️
       </button>
-      <span className="pr-2 text-[10px] text-aether-text-dim">v0.2.0</span>
+      <span className="pr-2 text-[10px] text-aether-text-dim">v{pkg.version}</span>
       {/* Fase G: botón de actualización disponible (esquina superior derecha) */}
       {availableUpdate && (
         <button
