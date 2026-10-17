@@ -46,6 +46,8 @@ jobs:
           releaseBody: 'Descarga el instalador para tu sistema. A partir de esta versión, la app se actualiza automáticamente (botón ⬆ en la esquina superior derecha).'
           releaseDraft: false
           prerelease: false
+          # El updater debe usar el setup NSIS (instalación currentUser), no el MSI
+          updaterJsonPreferNsis: true
 
       # El ejecutable portable no es un bundle: se adjunta aparte al mismo release
       - name: Prepare portable artifact
