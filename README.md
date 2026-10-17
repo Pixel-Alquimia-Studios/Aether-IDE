@@ -51,11 +51,11 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > 🚀 **A partir de esta versión los releases se publican automáticamente con GitHub Actions** — los instaladores y el archivo `latest.json` del actualizador automático viven en [GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest).
 
-| Archivo | Tipo |
-|---|---|
-| [aether-ide-0.2.2-x64-setup.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador NSIS (Windows x64) |
-| [aether-ide-0.2.2-x64.msi](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador MSI (Windows x64) |
-| [aether-ide-0.2.2-x64-portable.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | **Portable** — ejecutable suelto, sin instalación |
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.2.2-x64-portable.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 11,7 MB |
+| [aether-ide-0.2.2-x64-setup.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador NSIS (Windows x64) | 5,62 MB |
+| [aether-ide-0.2.2-x64.msi](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador MSI (Windows x64) | 6,62 MB |
 
 > ⬆ Los usuarios de v0.2.1+ recibirán esta actualización automáticamente (botón **⬆ Actualizar** en la esquina superior derecha).
 
