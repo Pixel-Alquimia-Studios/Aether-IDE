@@ -25,7 +25,7 @@ Write-Output '[1] Ejecutable nativo (release):'
 $failed = -not (Check-Artifact (Join-Path $release 'aether-ide.exe') 'aether-ide.exe') -or $failed
 
 Write-Output '[2] Instalador NSIS:'
-$nsis = Get-ChildItem -LiteralPath (Join-Path $bundle 'nsis') -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+$nsis = Get-ChildItem -LiteralPath (Join-Path $bundle 'nsis') -Filter '*.exe' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($nsis) {
     $failed = -not (Check-Artifact $nsis.FullName 'Instalador NSIS (.exe)') -or $failed
 } else {
@@ -34,7 +34,7 @@ if ($nsis) {
 }
 
 Write-Output '[3] Instalador MSI:'
-$msi = Get-ChildItem -LiteralPath (Join-Path $bundle 'msi') -Filter '*.msi' -ErrorAction SilentlyContinue | Select-Object -First 1
+$msi = Get-ChildItem -LiteralPath (Join-Path $bundle 'msi') -Filter '*.msi' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if ($msi) {
     $failed = -not (Check-Artifact $msi.FullName 'Instalador MSI (.msi)') -or $failed
 } else {

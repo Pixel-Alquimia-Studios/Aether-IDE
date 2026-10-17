@@ -6,7 +6,7 @@
 
 React + TypeScript · Rust (Tauri v2) · Monaco Editor
 
-[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.2.0-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
+[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.2.1-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
@@ -47,7 +47,15 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.2.0 *(actual)*
+### v0.2.1 *(actual)*
+
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.2.1-x64-portable.exe](downloads/0.2.1/aether-ide-0.2.1-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 11,7 MB |
+| [aether-ide-0.2.1-x64-setup.exe](downloads/0.2.1/aether-ide-0.2.1-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,62 MB |
+| [aether-ide-0.2.1-x64.msi](downloads/0.2.1/aether-ide-0.2.1-x64.msi) | Instalador MSI (Windows x64) | 6,62 MB |
+
+### v0.2.0
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
@@ -89,6 +97,22 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.2.1
+
+**Añadido**
+- **Overhaul estético completo** (tema "Aether Night"): nueva paleta de alto contraste, tema Monaco propio con sintaxis distintiva (keywords violetas bold, funciones azul, tipos cyan), scrollbars ultra finos, focus rings y animación de entrada en mensajes del chat
+- **Identidad visual por subagente**: 🐛 BugBot (rosa), 🛡 SecBot (esmeralda) y 📋 AuditBot (ámbar) con avatar circular y glow de su color
+- **Glassmorphism** en Command Palette, menús flotantes, overlay de actualización y diálogo de términos (backdrop con blur + paneles translúcidos)
+- **Barra de estado mejorada**: contador de cambios Git pendientes (punto ámbar), lenguaje del archivo activo y badge ✦ Aether
+- Botón **Enviar** con gradiente violeta que brilla al hover; indicador activo de la sidebar con glow
+
+**Corregido** (5 hallazgos del Bugbot)
+- **CRITICAL**: la cancelación de streams estaba rota — el mapa de tareas nunca se inicializaba en Rust, por lo que todo chat/stream del agente fallaba al instante con "cancelado por el usuario"
+- Errores de proveedor ya no se entregan dos veces al frontend (solo por el canal IPC; el comando siempre resuelve `Ok`)
+- Salida única en `chat_stream`: el desregistro de tareas se ejecuta siempre, evitando entradas obsoletas en el mapa de cancelación
+- Tooltips del chat restaurados al sistema i18n (renombrar/eliminar/cerrar)
+- Dependencia circular `i18n ↔ settingsStore` rota definitivamente (módulo compartido `language.ts`)
 
 ### v0.2.0
 
