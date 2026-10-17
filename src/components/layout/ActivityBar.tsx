@@ -25,7 +25,7 @@ export function ActivityBar() {
     <div className="flex w-12 flex-col items-center border-r border-aether-border bg-aether-surface py-2">
       <div
         title="Aether IDE"
-        className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-aether-accent/15 text-lg text-aether-accent"
+        className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-aether-accent/25 to-aether-accent/5 text-lg text-aether-accent shadow-[0_0_12px_rgba(167,139,250,0.25)]"
       >
         ✦
       </div>
@@ -46,7 +46,7 @@ export function ActivityBar() {
               }`}
             >
               {sidebarVisible && activeView === view.id && (
-                <span className="absolute left-[-8px] h-5 w-0.5 rounded-full bg-aether-accent" />
+                <span className="absolute left-[-8px] h-5 w-0.5 rounded-full bg-aether-accent shadow-[0_0_8px_2px_rgba(167,139,250,0.5)]" />
               )}
               {view.icon}
             </button>

@@ -1,6 +1,6 @@
 [package]
 name = "aether-ide"
-version = "0.2.0"
+version = "0.2.1"
 description = "Editor de código con integración y gestión de APIs de IA"
 authors = ["MBX"]
 edition = "2021"
@@ -23,7 +23,7 @@ keyring = { version = "3", features = ["windows-native", "apple-native", "sync-s
 portable-pty = "0.9"
 tauri-plugin-updater = "2"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
-tokio = { version = "1", features = ["time", "sync"] }
+tokio = { version = "1", features = ["time", "sync", "macros"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }

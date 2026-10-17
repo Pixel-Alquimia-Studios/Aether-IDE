@@ -90,13 +90,6 @@ export interface ChatParams {
   model: string
   messages: Array<{ role: string; content: string }>
   thinkingLevel?: ThinkingLevel
-}
-
-export interface ChatParams {
-  providerId: string
-  model: string
-  messages: Array<{ role: string; content: string }>
-  thinkingLevel?: ThinkingLevel
   /** Identifica el stream para poder DETENERLO con chat_stop (Fase E) */
   taskId?: string
 }
@@ -173,6 +166,7 @@ export async function chatWithTools(params: {
     model: params.model,
     messages: params.messages,
     tools: params.tools,
+    taskId: `agent-step-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     thinkingLevel: params.thinkingLevel ?? null,
   })
 }

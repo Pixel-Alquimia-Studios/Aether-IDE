@@ -1,15 +1,16 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-aether-bg: #1e1f26;
-  --color-aether-surface: #26272f;
-  --color-aether-border: #33353f;
-  --color-aether-text: #d4d4d8;
-  --color-aether-text-dim: #8b8d98;
-  --color-aether-accent: #aa3bff;
+  --color-aether-bg: #16161d;
+  --color-aether-surface: #1e1f28;
+  --color-aether-border: #363745;
+  --color-aether-text: #e0e0e8;
+  --color-aether-text-dim: #7c7e92;
+  --color-aether-accent: #a78bfa;
+  --color-aether-accent-strong: #7c3aed;
 
-  --font-sans: 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'Cascadia Code', ui-monospace, Consolas, monospace;
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Consolas, monospace;
 }
 
 html,
@@ -24,7 +25,28 @@ body,
   font-size: 13px;
 }
 
-/* Gutter diff de Git en Monaco (Fase 4.3) */
+::selection {
+  background: rgba(167, 139, 250, 0.3);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.6);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
+button,
+input,
+select,
+textarea {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease;
+}
+
 .git-gutter-added {
   background: #2ea043;
   width: 4px !important;
@@ -39,10 +61,9 @@ body,
   border-radius: 2px;
 }
 
-/* Scrollbars finos y modernos (estilo Cursor/VS Code) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -50,14 +71,43 @@ body,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-enter {
+  animation: message-in 250ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
 }

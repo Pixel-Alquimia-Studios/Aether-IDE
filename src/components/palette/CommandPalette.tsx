@@ -52,25 +52,30 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[10vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-[10vh] backdrop-blur-sm"
       onClick={() => setPaletteOpen(false)}
     >
       <div
-        className="w-[560px] max-w-[90vw] overflow-hidden rounded-lg border border-aether-border bg-aether-surface shadow-2xl"
+        className="w-[560px] max-w-[90vw] overflow-hidden rounded-xl border border-white/10 bg-aether-surface/90 shadow-2xl backdrop-blur-2xl"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setActiveIndex(0)
-          }}
-          placeholder="Escribe un comando o busca un archivo…"
-          className="w-full border-b border-aether-border bg-transparent px-4 py-3 text-[13px] text-aether-text outline-none placeholder:text-aether-text-dim"
-        />
-        <div className="max-h-[50vh] overflow-y-auto py-1">
+        <div className="relative">
+          <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-[13px] text-aether-text-dim">
+            ⌕
+          </span>
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setActiveIndex(0)
+            }}
+            placeholder="Escribe un comando o busca un archivo…"
+            className="w-full border-b border-aether-border bg-transparent px-10 py-3 text-[13px] text-aether-text outline-none placeholder:text-aether-text-dim"
+          />
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto p-1">
           {results.length === 0 && (
             <p className="px-4 py-3 text-[13px] text-aether-text-dim">Sin resultados</p>
           )}
@@ -79,16 +84,21 @@ export function CommandPalette() {
               key={cmd.id}
               onClick={() => execute(cmd)}
               onMouseEnter={() => setActiveIndex(i)}
-              className={`flex w-full items-center justify-between gap-3 px-4 py-1.5 text-left text-[13px] ${
-                i === activeIndex ? 'bg-aether-accent/20 text-white' : 'text-aether-text'
+              className={`relative flex w-full items-center justify-between gap-3 rounded-md px-4 py-1.5 text-left text-[13px] ${
+                i === activeIndex
+                  ? 'bg-aether-accent/20 text-white'
+                  : 'text-aether-text hover:bg-white/[0.04]'
               }`}
             >
+              {i === activeIndex && (
+                <span className="absolute top-1/2 left-0.5 h-4 w-0.5 -translate-y-1/2 rounded-full bg-aether-accent shadow-[0_0_6px_1px_rgba(167,139,250,0.6)]" />
+              )}
               <span className="truncate">
                 {cmd.category && <span className="text-aether-text-dim">{cmd.category}: </span>}
                 {cmd.title}
               </span>
               {cmd.keybinding && (
-                <kbd className="shrink-0 rounded border border-aether-border px-1.5 py-0.5 font-mono text-[10px] text-aether-text-dim">
+                <kbd className="shrink-0 rounded border border-aether-border bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-aether-text-dim">
                   {cmd.keybinding}
                 </kbd>
               )}

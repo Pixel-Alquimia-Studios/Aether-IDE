@@ -1,10 +1,11 @@
+import type { Language } from '@/lib/language'
 import { useSettingsStore } from '@/stores/settingsStore'
 
 // Sistema de i18n casero (v0.2.0): diccionarios Español latino / Inglés con
 // claves tipadas. El idioma vive en settingsStore (arranque auto por SO con
 // override manual en Ajustes → General → Idioma).
 
-export type Language = 'es' | 'en'
+export type { Language }
 
 const en = {
   // MenuBar — Archivo
@@ -304,7 +305,9 @@ const es: Record<TranslationKey, string> = {
 
 const dictionaries: Record<Language, Record<TranslationKey, string>> = { en, es }
 
-/** Hook reactivo: devuelve la función de traducción según el idioma activo */
+
+
+/** Hook reactivo: lee el idioma del settingsStore (reactivo a cambios) */
 export function useT(): (key: TranslationKey) => string {
   const language = useSettingsStore((s) => s.language)
   return (key) => {
@@ -320,8 +323,3 @@ export function tSync(key: TranslationKey): string {
   return dict[key] ?? en[key] ?? key
 }
 
-/** Idioma por defecto según el locale del SO (es-* → español latino) */
-export function detectLanguage(): Language {
-  if (typeof navigator === 'undefined') return 'en'
-  return navigator.language?.toLowerCase().startsWith('es') ? 'es' : 'en'
-}

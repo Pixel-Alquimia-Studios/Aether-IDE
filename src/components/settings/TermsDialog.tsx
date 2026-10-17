@@ -6,8 +6,8 @@ export function TermsDialog({ onAccept }: { onAccept: () => void }) {
   const t = useT()
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
-      <div className="max-h-[85vh] w-[560px] max-w-[92vw] overflow-hidden rounded-xl border border-aether-border bg-aether-surface shadow-2xl">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="max-h-[85vh] w-[560px] max-w-[92vw] overflow-hidden rounded-xl border border-white/10 bg-aether-surface/85 shadow-2xl backdrop-blur-2xl">
         <div className="border-b border-aether-border px-5 py-4">
           <h2 className="text-[16px] font-semibold text-white">✦ Aether IDE</h2>
           <p className="mt-1 text-[12px] text-aether-text-dim">
@@ -45,7 +45,7 @@ export function TermsDialog({ onAccept }: { onAccept: () => void }) {
               acceptTerms()
               onAccept()
             }}
-            className="w-full rounded bg-aether-accent px-3 py-2 text-[13px] font-medium text-white hover:bg-aether-accent/80"
+            className="w-full rounded bg-gradient-to-br from-aether-accent to-aether-accent-strong px-3 py-2 text-[13px] font-medium text-white transition-shadow hover:shadow-[0_0_14px_rgba(167,139,250,0.4)]"
           >
             {t('terms.accept')}
           </button>

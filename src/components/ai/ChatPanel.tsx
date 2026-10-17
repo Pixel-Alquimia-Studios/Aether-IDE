@@ -55,6 +55,25 @@ type TimelineItem =
   | { kind: 'chat'; ts: number; index: number; msg: ChatMessage }
   | { kind: 'agent'; ts: number; step: AgentStep }
 
+/** Identidad visual por subagente (fase 2: avatars con color propio) */
+const BOT_THEME: Record<string, { ring: string; avatarBg: string; glow: string }> = {
+  BugBot: {
+    ring: 'border-rose-500/30',
+    avatarBg: 'bg-rose-500/15 shadow-[0_0_10px_rgba(244,63,94,0.25)]',
+    glow: 'bg-rose-500/[0.03]',
+  },
+  SecBot: {
+    ring: 'border-emerald-500/30',
+    avatarBg: 'bg-emerald-500/15 shadow-[0_0_10px_rgba(16,185,129,0.25)]',
+    glow: 'bg-emerald-500/[0.03]',
+  },
+  AuditBot: {
+    ring: 'border-amber-500/30',
+    avatarBg: 'bg-amber-500/15 shadow-[0_0_10px_rgba(245,158,11,0.25)]',
+    glow: 'bg-amber-500/[0.03]',
+  },
+}
+
 export function ChatPanel() {
   const providers = useSettingsStore((s) => s.providers)
   const selectedProviderId = useSettingsStore((s) => s.selectedProviderId)
@@ -282,12 +301,12 @@ export function ChatPanel() {
   return (
     <div className="flex h-full w-[380px] shrink-0 flex-col border-l border-aether-border bg-aether-bg">
       {/* Historial de chats: nuevo / reanudar / renombrar / eliminar + ✕ cerrar */}
-      <div className="flex items-center gap-1.5 border-b border-aether-border bg-aether-surface px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-aether-border bg-aether-surface px-2.5 py-2">
         <button
           title={t('chat.newChat')}
           onClick={() => void newChat()}
           disabled={streaming || agentRunning}
-          className="rounded px-2 py-1 text-[13px] text-aether-text hover:bg-white/10 disabled:opacity-40"
+          className="rounded-md px-1.5 py-1 text-[15px] leading-none text-aether-text transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
         >
           ＋
         </button>
@@ -296,7 +315,7 @@ export function ChatPanel() {
           onChange={(e) => {
             if (e.target.value) void resumeChat(e.target.value)
           }}
-          className="min-w-0 flex-1 rounded border border-aether-border bg-aether-bg px-2 py-1 text-[12px] text-aether-text outline-none"
+          className="min-w-0 flex-1 cursor-pointer rounded-md border border-transparent bg-transparent px-2 py-1 text-[12px] text-aether-text outline-none transition-colors hover:border-aether-border hover:bg-aether-bg focus:border-aether-accent"
         >
           <option value="">— Chat nuevo —</option>
           {history.map((c) => (
@@ -306,13 +325,13 @@ export function ChatPanel() {
           ))}
         </select>
         <button
-          title="Renombrar chat"
+          title={t('chat.renameChat')}
           onClick={() => {
             setRenameValue(chatTitle ?? '')
             setRenaming(true)
           }}
           disabled={!chatId || streaming || agentRunning}
-          className="rounded px-1.5 py-1 text-[12px] text-aether-text-dim hover:bg-white/10 disabled:opacity-40"
+          className="rounded-md px-1.5 py-1 text-[12px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-aether-text disabled:opacity-30"
         >
           ✎
         </button>
@@ -320,14 +339,15 @@ export function ChatPanel() {
           title={t('chat.deleteChat')}
           onClick={() => chatId && void deleteChatAction(chatId)}
           disabled={!chatId || streaming || agentRunning}
-          className="rounded px-1.5 py-1 text-[12px] text-aether-text-dim hover:bg-white/10 disabled:opacity-40"
+          className="rounded-md px-1.5 py-1 text-[12px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-red-400 disabled:opacity-30"
         >
           🗑
         </button>
+        <span className="mx-0.5 h-4 w-px shrink-0 bg-aether-border" />
         <button
           title={t('chat.close')}
           onClick={() => setChatPanelVisible(false)}
-          className="rounded px-1.5 py-1 text-[12px] text-aether-text-dim hover:bg-white/10"
+          className="rounded-md px-1.5 py-1 text-[12px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-aether-text"
         >
           ✕
         </button>
@@ -406,7 +426,7 @@ export function ChatPanel() {
             {modeMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setModeMenuOpen(false)} />
-                <div className="absolute bottom-full left-0 z-50 mb-1 w-40 overflow-hidden rounded-lg border border-aether-border bg-aether-surface py-1 shadow-2xl">
+                <div className="absolute bottom-full left-0 z-50 mb-1 w-40 overflow-hidden rounded-lg border border-aether-border bg-aether-surface/90 py-1 shadow-2xl backdrop-blur-xl">
                   {(['plan', 'agent'] as const).map((m) => (
                     <button
                       key={m}
@@ -470,30 +490,30 @@ export function ChatPanel() {
             const step = item.step
             const prevItem = i > 0 ? timeline[i - 1] : null
             const botKey = step.botName ?? null
-            // Encabezado de identidad del subagente (solo al iniciar su grupo)
             const showBotHeader =
               botKey !== null && !(prevItem?.kind === 'agent' && prevItem.step.botName === botKey)
             const subagentDef = SUBAGENTS.find((s) => s.botName === botKey)
             const botEmoji = subagentDef?.emoji ?? '🤖'
+            const botTheme = botKey ? BOT_THEME[botKey] : undefined
 
             let content: React.ReactNode
             if (step.type === 'tool') {
               content = (
-                <div className="rounded border border-aether-border bg-aether-bg px-2.5 py-1.5 text-[12px]">
+                <div className="rounded-md border border-aether-border/60 bg-aether-surface px-2.5 py-1.5 text-[12px] transition-colors">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-aether-text-dim">⚙ {step.name}</span>
+                    <span className="font-mono text-[11px] text-aether-text-dim">⚙ {step.name}</span>
                     {step.status === 'running' ? (
                       <span className="text-aether-accent">ejecutando…</span>
                     ) : (
                       <details className="min-w-0 flex-1">
-                        <summary className="cursor-pointer text-[11px] text-aether-text-dim">
+                        <summary className="cursor-pointer text-[11px] text-aether-text-dim hover:text-aether-text">
                           ver resultado
                         </summary>
                       </details>
                     )}
                   </div>
                   {step.status === 'done' && step.output && (
-                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-aether-text-dim">
+                    <pre className="mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-aether-bg px-2 py-1.5 font-mono text-[11px] leading-relaxed text-aether-text-dim">
                       {step.output}
                     </pre>
                   )}
@@ -503,21 +523,31 @@ export function ChatPanel() {
               content = <FindingsReport findings={step.findings} botName={step.botName} />
             } else {
               content = (
-                <div className="rounded-lg border border-aether-border bg-aether-surface px-3 py-2 text-[13px] text-aether-text">
+                <div className="rounded-lg border border-aether-border/60 bg-aether-surface px-3 py-2 text-[13px] text-aether-text">
                   <MarkdownRenderer content={step.content ?? ''} />
                 </div>
               )
             }
 
             return (
-              <div key={`a-${i}-${step.ts}`} className={botKey ? 'rounded-lg border border-dashed border-aether-accent/30 bg-aether-accent/[0.03] p-2' : ''}>
+              <div
+                key={`a-${i}-${step.ts}`}
+                className={`message-enter rounded-lg p-2 ${
+                  botKey && botTheme
+                    ? `border border-dashed ${botTheme.ring} ${botTheme.glow}`
+                    : ''
+                }`}
+              >
                 {showBotHeader && botKey && (
-                  <div className="mb-1.5 flex items-center gap-1.5 px-1">
-                    <span className="text-[11px] font-bold text-aether-accent">
-                      {botEmoji} {botKey}
+                  <div className="mb-2 flex items-center gap-2 px-1">
+                    <span
+                      className={`flex h-6 w-6 items-center justify-center rounded-full text-[12px] ${botTheme?.avatarBg ?? 'bg-aether-accent/15'}`}
+                    >
+                      {botEmoji}
                     </span>
-                    <span className="text-[10px] text-aether-text-dim">
-                      subagente de análisis · solo lectura
+                    <span className="text-[11px] font-bold text-aether-text">{botKey}</span>
+                    <span className="rounded-full bg-white/[0.06] px-1.5 py-px text-[9px] text-aether-text-dim">
+                      subagente · solo lectura
                     </span>
                   </div>
                 )}
@@ -532,13 +562,13 @@ export function ChatPanel() {
           return (
             <div
               key={`chat-${item.index}-${msg.ts ?? i}`}
-              className={`group relative flex ${isUser ? 'justify-end' : 'justify-start'}`}
+              className={`message-enter group relative flex ${isUser ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-[13px] ${
+                className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed transition-shadow ${
                   isUser
-                    ? 'bg-aether-accent/25 text-white'
-                    : 'border border-aether-border bg-aether-surface text-aether-text'
+                    ? 'rounded-br-sm bg-gradient-to-br from-aether-accent/30 to-aether-accent/15 text-white ring-1 ring-aether-accent/25'
+                    : 'rounded-bl-sm border border-aether-border/60 bg-aether-surface text-aether-text shadow-sm'
                 }`}
               >
                 {isUser ? (
@@ -554,8 +584,8 @@ export function ChatPanel() {
                     )}
                     <MarkdownRenderer content={msg.content} />
                     {msg.metrics && (
-                      <div className="mt-1 flex justify-end">
-                        <span className="text-[10px] text-aether-text-dim">
+                      <div className="mt-1.5 flex justify-end">
+                        <span className="text-[10px] tabular-nums text-aether-text-dim/70">
                           ⚡ {formatElapsed(msg.metrics.elapsedMs)} · ~{msg.metrics.tokens} tokens
                         </span>
                       </div>
@@ -564,20 +594,19 @@ export function ChatPanel() {
                 )}
               </div>
 
-              {/* Time Travel: editar / eliminar mensajes del usuario */}
               {isUser && msg.turnId && !streaming && !agentRunning && (
-                <div className="absolute top-1 right-1 hidden items-center gap-0.5 rounded bg-aether-surface/90 p-0.5 shadow group-hover:flex">
+                <div className="absolute top-1 right-1 hidden items-center gap-0.5 rounded-md bg-aether-surface/95 p-0.5 shadow-md ring-1 ring-aether-border group-hover:flex">
                   <button
                     title="Editar y reenviar (revierte los cambios posteriores)"
                     onClick={() => editMessageByTurn(msg.turnId as string, msg.content)}
-                    className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                    className="rounded px-1.5 py-0.5 text-[11px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-aether-text"
                   >
                     ✏️
                   </button>
                   <button
                     title="Eliminar (revierte los cambios del agente desde aquí)"
                     onClick={() => truncateFromTurn(msg.turnId as string)}
-                    className="rounded px-1 text-[11px] text-aether-text-dim hover:bg-white/10 hover:text-aether-text"
+                    className="rounded px-1.5 py-0.5 text-[11px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-red-400"
                   >
                     🗑
                   </button>
@@ -650,7 +679,7 @@ export function ChatPanel() {
 
         {/* Menú flotante de menciones */}
         {mentionQuery !== null && (
-          <div className="absolute bottom-full left-2 z-50 mb-1 max-h-64 w-[calc(100%-1rem)] overflow-y-auto rounded-lg border border-aether-border bg-aether-surface shadow-2xl">
+          <div className="absolute bottom-full left-2 z-50 mb-1 max-h-64 w-[calc(100%-1rem)] overflow-y-auto rounded-lg border border-aether-border bg-aether-surface/90 shadow-2xl backdrop-blur-xl">
             {filteredMentionOptions.length === 0 && (
               <p className="px-3 py-2 text-[12px] text-aether-text-dim">Sin coincidencias</p>
             )}
@@ -718,7 +747,7 @@ export function ChatPanel() {
               streaming ||
               (agentMode === 'agent' && agentRunning)
             }
-            className="rounded bg-aether-accent px-3 py-2 text-[13px] text-white disabled:opacity-40"
+            className="rounded bg-gradient-to-br from-aether-accent to-aether-accent-strong px-4 py-2 text-[13px] font-medium text-white shadow-sm transition-all hover:shadow-[0_0_14px_rgba(167,139,250,0.4)] disabled:opacity-40 disabled:shadow-none"
           >
             {streaming || agentRunning
               ? '…'

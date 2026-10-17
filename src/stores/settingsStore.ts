@@ -2,7 +2,7 @@ import { isTauri } from '@tauri-apps/api/core'
 import { create } from 'zustand'
 
 import { deleteApiKey, fetchModels, hasApiKey, listProviders, saveApiKey } from '@/lib/ai/api'
-import { detectLanguage, type Language } from '@/lib/i18n'
+import { detectLanguage, type Language } from '@/lib/language'
 import type { ModelInfo, ProviderInfo } from '@/types/ai'
 
 // Persistencia local de modelos obtenidos (dev en navegador; en desktop la

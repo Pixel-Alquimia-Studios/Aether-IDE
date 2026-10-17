@@ -50,8 +50,11 @@ export function UpdateOverlay({ update, onClose }: { update: Update; onClose: ()
             : ''
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90">
-      <div className="w-[420px] max-w-[90vw] rounded-xl border border-aether-border bg-aether-surface p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-[420px] max-w-[90vw] rounded-xl border border-white/10 bg-aether-surface/85 p-6 shadow-2xl backdrop-blur-2xl">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-aether-accent/30 to-aether-accent/5 text-lg text-aether-accent shadow-[0_0_14px_rgba(167,139,250,0.3)]">
+          ✦
+        </div>
         <h2 className="text-[18px] font-semibold text-white">
           Aether IDE — Actualización disponible
         </h2>
@@ -68,7 +71,7 @@ export function UpdateOverlay({ update, onClose }: { update: Update; onClose: ()
           <div className="mt-6 flex gap-2">
             <button
               onClick={() => void startUpdate()}
-              className="flex-1 rounded bg-aether-accent px-3 py-2 text-[13px] font-medium text-white hover:bg-aether-accent/80"
+              className="flex-1 rounded bg-gradient-to-br from-aether-accent to-aether-accent-strong px-3 py-2 text-[13px] font-medium text-white transition-shadow hover:shadow-[0_0_14px_rgba(167,139,250,0.4)]"
             >
               Actualizar ahora
             </button>
@@ -85,7 +88,7 @@ export function UpdateOverlay({ update, onClose }: { update: Update; onClose: ()
           <div className="mt-6">
             <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
               <div
-                className="h-full rounded-full bg-aether-accent transition-all duration-300"
+                className="h-full rounded-full bg-gradient-to-r from-aether-accent-strong to-aether-accent transition-all duration-300"
                 style={{ width: `${phase === 'downloading' ? progress : 100}%` }}
               />
             </div>
