@@ -6,7 +6,7 @@
 
 React + TypeScript · Rust (Tauri v2) · Monaco Editor
 
-[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.2.1-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
+[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.2.2-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
@@ -47,7 +47,19 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.2.1 *(actual)*
+### v0.2.2 *(actual)*
+
+> 🚀 **A partir de esta versión los releases se publican automáticamente con GitHub Actions** — los instaladores y el archivo `latest.json` del actualizador automático viven en [GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest).
+
+| Archivo | Tipo |
+|---|---|
+| [aether-ide-0.2.2-x64-setup.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador NSIS (Windows x64) |
+| [aether-ide-0.2.2-x64.msi](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador MSI (Windows x64) |
+| [aether-ide-0.2.2-x64-portable.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | **Portable** — ejecutable suelto, sin instalación |
+
+> ⬆ Los usuarios de v0.2.1+ recibirán esta actualización automáticamente (botón **⬆ Actualizar** en la esquina superior derecha).
+
+### v0.2.1
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
@@ -97,6 +109,15 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.2.2
+
+**Añadido**
+- **Actualizador automático funcional**: workflow de GitHub Actions (`.github/workflows/release.yml`) que al pushear un tag `v*` compila, **firma con minisign**, genera `latest.json` y publica el GitHub Release con instaladores + portable — los usuarios de v0.2.1+ ya reciben el botón **⬆ Actualizar**
+- Artefactos de updater habilitados (`createUpdaterArtifacts` en tauri.conf.json)
+
+**Corregido**
+- El badge de versión de la barra superior ya no está hardcodeado: se lee de `package.json` en tiempo de compilación (con `resolveJsonModule`)
 
 ### v0.2.1
 

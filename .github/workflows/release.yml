@@ -1,0 +1,60 @@
+name: Release
+
+# Al pushear un tag v* (ej: v0.2.2): compila, firma, genera latest.json
+# y crea el GitHub Release con instaladores + artefactos del updater.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # Build + firma del updater + latest.json + GitHub Release (todo en uno)
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Aether IDE v__VERSION__'
+          releaseBody: 'Descarga el instalador para tu sistema. A partir de esta versión, la app se actualiza automáticamente (botón ⬆ en la esquina superior derecha).'
+          releaseDraft: false
+          prerelease: false
+
+      # El ejecutable portable no es un bundle: se adjunta aparte al mismo release
+      - name: Prepare portable artifact
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          Copy-Item src-tauri/target/release/aether-ide.exe "aether-ide-$v-x64-portable.exe"
+
+      - name: Attach portable to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: aether-ide-*-x64-portable.exe

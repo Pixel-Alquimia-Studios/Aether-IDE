@@ -1,6 +1,6 @@
 [package]
 name = "aether-ide"
-version = "0.2.1"
+version = "0.2.2"
 description = "Editor de código con integración y gestión de APIs de IA"
 authors = ["MBX"]
 edition = "2021"
