@@ -31,6 +31,7 @@ export default defineConfig({
         '**/Aether-tests/**',
         '**/Aether-workspace/**',
         '**/aether-workspace/**',
+        '**/ECC-main/**',
       ],
     },
   },

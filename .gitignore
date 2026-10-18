@@ -28,6 +28,10 @@ Aether-tests/
 Aether-workspace/
 aether-workspace/
 
+# Material de referencia de terceros (adaptaciones de affaan-m/ECC, MIT)
+# Solo lectura: no subir a GitHub ni empaquetar
+ECC-main/
+
 # Claves privadas del updater
 keys/
 *.key
