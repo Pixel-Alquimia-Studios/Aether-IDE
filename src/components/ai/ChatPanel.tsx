@@ -5,6 +5,8 @@ import { FindingsReport } from '@/components/ai/FindingsReport'
 import { MarkdownRenderer } from '@/components/ai/MarkdownRenderer'
 import { ThinkingBlock } from '@/components/ai/ThinkingBlock'
 import { collectTurnIdsFrom, rollbackTurns } from '@/lib/agent/rollback'
+import { CHAT_COMMANDS } from '@/lib/agent/commands'
+import type { ChatCommand } from '@/lib/agent/commands'
 import { detectSubagent, SUBAGENTS } from '@/lib/agent/subagents'
 import { fuzzyScore } from '@/lib/commands/fuzzy'
 import { useT } from '@/lib/i18n'
@@ -113,6 +115,9 @@ export function ChatPanel() {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionIndex, setMentionIndex] = useState(0)
   const [mentions, setMentions] = useState<MentionContext[]>([])
+  // Menú de comandos "/" (fase E): query tras el slash, o null si está cerrado
+  const [slashQuery, setSlashQuery] = useState<string | null>(null)
+  const [slashIndex, setSlashIndex] = useState(0)
   const [autoContextEnabled, setAutoContextEnabled] = useState(true)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -190,14 +195,35 @@ export function ChatPanel() {
       .map((r) => r.opt)
   }, [mentionQuery, mentionOptions])
 
+  // Comandos "/" filtrados difusamente sobre nombre + descripción
+  const filteredCommands = useMemo<ChatCommand[]>(() => {
+    const q = slashQuery ?? ''
+    if (q === '') return CHAT_COMMANDS
+    return CHAT_COMMANDS.filter((c) => fuzzyScore(q, `${c.name} ${c.description}`) !== null)
+  }, [slashQuery])
+
+  const selectCommand = (cmd: ChatCommand): void => {
+    setInput((prev) => prev.replace(/(^|\s)\/(\w*)$/, `$1${cmd.insert} `))
+    setSlashQuery(null)
+  }
+
   const handleInputChange = (value: string): void => {
     setInput(value)
-    const match = /@([^\s@]*)$/.exec(value)
-    if (match) {
-      setMentionQuery(match[1])
+    const mentionMatch = /@([^\s@]*)$/.exec(value)
+    if (mentionMatch) {
+      setMentionQuery(mentionMatch[1])
       setMentionIndex(0)
+      setSlashQuery(null)
+      return
+    }
+    // Menú de comandos: "/" al inicio del input o tras espacio/salto de línea
+    // (no interfiere con rutas como src/lib)
+    const slashMatch = /(^|\s)\/(\w*)$/.exec(value)
+    if (slashMatch) {
+      setSlashQuery(slashMatch[2])
+      setSlashIndex(0)
     } else {
-      setMentionQuery(null)
+      setSlashQuery(null)
     }
   }
 
@@ -240,6 +266,29 @@ export function ChatPanel() {
   }
 
   const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+    // Navegación del menú de comandos "/" (Enter NO envía mientras esté abierto)
+    if (slashQuery !== null && filteredCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSlashIndex((i) => Math.min(i + 1, filteredCommands.length - 1))
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSlashIndex((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const cmd = filteredCommands[slashIndex]
+        if (cmd) selectCommand(cmd)
+        return
+      }
+      if (e.key === 'Escape') {
+        setSlashQuery(null)
+        return
+      }
+    }
     // Navegación del menú de menciones cuando está abierto
     if (mentionQuery !== null && filteredMentionOptions.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -290,12 +339,6 @@ export function ChatPanel() {
       void renameChat(chatId, renameValue)
     }
     setRenaming(false)
-  }
-
-  const applySubagentChip = (slash: string): void => {
-    const base = input.replace(/^\/(qa|security|audit)\s*/i, '')
-    setInput(`${slash} ${base}`.trimEnd() + ' ')
-    setMentionQuery(null)
   }
 
   return (
@@ -631,19 +674,9 @@ export function ChatPanel() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Chips de subagentes + contexto + menciones */}
+      {/* Chips de contexto + menciones (los comandos viven en el menú "/") */}
       <div className="relative border-t border-aether-border p-2">
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-          {SUBAGENTS.map((s) => (
-            <button
-              key={s.id}
-              title={`${s.slash} — ${s.description}`}
-              onClick={() => applySubagentChip(s.slash)}
-              className="rounded-full border border-aether-border bg-aether-bg px-2 py-0.5 text-[10px] text-aether-text-dim hover:border-aether-accent/50 hover:text-aether-text"
-            >
-              {s.emoji} {s.botName}
-            </button>
-          ))}
           {autoContextEnabled && activeCtxName && (
             <span
               title={`Contexto automático: ${activeTabPath}`}
@@ -685,6 +718,42 @@ export function ChatPanel() {
           ))}
         </div>
 
+        {/* Menú flotante de comandos "/" */}
+        {slashQuery !== null && (
+          <div className="absolute bottom-full left-2 z-50 mb-1 max-h-64 w-[calc(100%-1rem)] overflow-y-auto rounded-lg border border-aether-border bg-aether-surface/90 shadow-2xl backdrop-blur-xl">
+            <p className="border-b border-aether-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-aether-text-dim">
+              {t('chat.commands')}
+            </p>
+            {filteredCommands.length === 0 && (
+              <p className="px-3 py-2 text-[12px] text-aether-text-dim">{t('chat.noMatches')}</p>
+            )}
+            {filteredCommands.map((cmd, i) => (
+              <button
+                key={cmd.name}
+                onClick={() => selectCommand(cmd)}
+                onMouseEnter={() => setSlashIndex(i)}
+                className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12px] ${
+                  i === slashIndex
+                    ? 'bg-aether-accent/20 text-white'
+                    : 'text-aether-text hover:bg-white/5'
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] ${cmd.avatarClass}`}
+                >
+                  {cmd.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium text-aether-text">/{cmd.name}</span>
+                  <span className="block truncate text-[10px] text-aether-text-dim">
+                    {cmd.description}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Menú flotante de menciones */}
         {mentionQuery !== null && (
           <div className="absolute bottom-full left-2 z-50 mb-1 max-h-64 w-[calc(100%-1rem)] overflow-y-auto rounded-lg border border-aether-border bg-aether-surface/90 shadow-2xl backdrop-blur-xl">
@@ -723,11 +792,9 @@ export function ChatPanel() {
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              agentMode === 'agent'
-                ? 'Tarea para el agente… (/qa, /security, /audit para análisis)'
-                : selected
-                  ? 'Escribe tu plan o pregunta… (usa @ y /qa, /security, /audit)'
-                  : 'Selecciona un proveedor en Ajustes…'
+              !selected
+                ? t('chat.placeholderNoProvider')
+                : t('chat.placeholderCommands')
             }
             rows={2}
             disabled={streaming || (agentMode === 'agent' && agentRunning)}
