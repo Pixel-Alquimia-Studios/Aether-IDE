@@ -5,7 +5,7 @@ use tauri::ipc::Channel;
 use crate::ai::{
     error_from_response, http_client, send_with_retries, strip_code_fences, truncate_chars_end,
     truncate_chars_start, ChatMessage, CompletionRequest, ModelInfo, Provider, ProviderInfo,
-    StreamChunk, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
+    StreamChunk, StreamUsage, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
 };
 
 pub struct OllamaProvider;
@@ -64,7 +64,7 @@ impl Provider for OllamaProvider {
         _api_key: Option<String>,
         thinking: Option<ThinkingLevel>,
         channel: &Channel<StreamChunk>,
-    ) -> Result<u64, String> {
+    ) -> Result<StreamUsage, String> {
         let url = format!("{}{}", self.info().base_url, self.info().chat_path);
         let msgs: Vec<serde_json::Value> = messages
             .iter()
@@ -117,11 +117,11 @@ impl Provider for OllamaProvider {
                     }
                 }
                 if value["done"].as_bool() == Some(true) {
-                    return Ok(generated_chars);
+                    return Ok(StreamUsage { generated_chars, ..Default::default() });
                 }
             }
         }
-        Ok(generated_chars)
+        Ok(StreamUsage { generated_chars, ..Default::default() })
     }
 
     async fn complete(

@@ -5,7 +5,8 @@ use tauri::ipc::Channel;
 use crate::ai::{
     error_from_response, extract_sse_data_lines, http_client, send_with_retries,
     strip_code_fences, truncate_chars_end, truncate_chars_start, ChatMessage, CompletionRequest,
-    ModelInfo, Provider, ProviderInfo, StreamChunk, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
+    ModelInfo, Provider, ProviderInfo, StreamChunk, StreamUsage, ThinkingLevel, ToolCall, ToolDef,
+    ToolResponse,
 };
 
 pub struct AnthropicProvider;
@@ -61,7 +62,7 @@ impl Provider for AnthropicProvider {
         api_key: Option<String>,
         thinking: Option<ThinkingLevel>,
         channel: &Channel<StreamChunk>,
-    ) -> Result<u64, String> {
+    ) -> Result<StreamUsage, String> {
         let key = api_key.ok_or_else(|| "API key no configurada".to_string())?;
 
         // Anthropic separa los mensajes system del resto
@@ -71,11 +72,24 @@ impl Provider for AnthropicProvider {
             .map(|m| m.content.as_str())
             .collect::<Vec<_>>()
             .join("\n\n");
-        let chat: Vec<serde_json::Value> = messages
+        let mut chat: Vec<serde_json::Value> = messages
             .iter()
             .filter(|m| m.role != "system")
             .map(|m| json!({ "role": m.role, "content": m.content }))
             .collect();
+
+        // Cache de prompt (prompt caching): breakpoints efímeros sobre el system
+        // y el último mensaje user → el prefijo estable de la conversación queda
+        // cacheado server-side y se factura ~10x más barato en los turnos
+        // siguientes (usage.cache_read_input_tokens).
+        if let Some(last_user) = chat.iter_mut().rev().find(|m| m["role"] == "user") {
+            let text = last_user["content"].as_str().unwrap_or("").to_string();
+            if !text.is_empty() {
+                last_user["content"] = json!([
+                    { "type": "text", "text": text, "cache_control": { "type": "ephemeral" } }
+                ]);
+            }
+        }
 
         let mut body = json!({
             "model": model,
@@ -92,7 +106,9 @@ impl Provider for AnthropicProvider {
             }
         }
         if !system.is_empty() {
-            body["system"] = json!(system);
+            body["system"] = json!([
+                { "type": "text", "text": system, "cache_control": { "type": "ephemeral" } }
+            ]);
         }
 
         let request = http_client()
@@ -103,7 +119,7 @@ impl Provider for AnthropicProvider {
 
         let response = send_with_retries(request, Some(channel)).await?;
 
-        let mut generated_chars: u64 = 0;
+        let mut usage = StreamUsage::default();
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
         while let Some(chunk) = stream.next().await {
@@ -114,6 +130,18 @@ impl Provider for AnthropicProvider {
                     continue;
                 };
                 match value["type"].as_str() {
+                    Some("message_start") => {
+                        // usage inicial: entrada + tokens cacheados (prompt caching)
+                        let u = &value["message"]["usage"];
+                        usage.input_tokens = u["input_tokens"].as_u64();
+                        usage.cached_tokens = u["cache_read_input_tokens"]
+                            .as_u64()
+                            .or_else(|| u["cache_creation_input_tokens"].as_u64());
+                    }
+                    Some("message_delta") => {
+                        // usage final: salida acumulada
+                        usage.output_tokens = value["usage"]["output_tokens"].as_u64();
+                    }
                     Some("content_block_delta") => {
                         // thinking_delta: razonamiento; text_delta: contenido
                         if value["delta"]["type"].as_str() == Some("thinking_delta") {
@@ -126,7 +154,7 @@ impl Provider for AnthropicProvider {
                             }
                         } else if let Some(text) = value["delta"]["text"].as_str() {
                             if !text.is_empty() {
-                                generated_chars += text.chars().count() as u64;
+                                usage.generated_chars += text.chars().count() as u64;
                                 channel
                                     .send(StreamChunk::Delta { text: text.to_string() })
                                     .map_err(|e| format!("Error de IPC: {e}"))?;
@@ -134,7 +162,7 @@ impl Provider for AnthropicProvider {
                         }
                     }
                     Some("message_stop") => {
-                        return Ok(generated_chars);
+                        return Ok(usage.clone());
                     }
                     Some("error") => {
                         let message = value["error"]["message"]
@@ -147,7 +175,7 @@ impl Provider for AnthropicProvider {
                 }
             }
         }
-        Ok(generated_chars)
+        Ok(usage)
     }
 
     async fn complete(

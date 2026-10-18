@@ -110,13 +110,21 @@ pub async fn chat_stream(
     let elapsed_ms = start.elapsed().as_millis() as u64;
 
     match result {
-        Ok(generated_chars) => {
-            let tokens = if generated_chars == 0 {
-                0
-            } else {
-                (generated_chars / 4).max(1)
-            };
-            let _ = on_chunk.send(StreamChunk::Metrics { elapsed_ms, tokens });
+        Ok(usage) => {
+            // Tokens reales del proveedor; fallback: estimación chars/4
+            let tokens = usage.output_tokens.unwrap_or_else(|| {
+                if usage.generated_chars == 0 {
+                    0
+                } else {
+                    (usage.generated_chars / 4).max(1)
+                }
+            });
+            let _ = on_chunk.send(StreamChunk::Metrics {
+                elapsed_ms,
+                tokens,
+                input_tokens: usage.input_tokens,
+                cached_tokens: usage.cached_tokens,
+            });
             let _ = on_chunk.send(StreamChunk::Done);
         }
         Err(message) => {

@@ -280,10 +280,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           })
         },
         onStatus: (status) => set({ statusText: status }),
-        onMetrics: (elapsedMs, tokens) =>
+        onMetrics: (elapsedMs, tokens, extra) =>
           set((state) => ({
             messages: state.messages.map((m, i) =>
-              i === state.messages.length - 1 ? { ...m, metrics: { elapsedMs, tokens } } : m,
+              i === state.messages.length - 1
+                ? {
+                    ...m,
+                    metrics: {
+                      elapsedMs,
+                      tokens,
+                      inputTokens: extra?.inputTokens,
+                      cachedTokens: extra?.cachedTokens,
+                    },
+                  }
+                : m,
             ),
           })),
       },

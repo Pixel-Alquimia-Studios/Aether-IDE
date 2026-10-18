@@ -48,6 +48,12 @@ export interface ChatMessage {
   thinking?: string
   /** Duración del razonamiento (hasta el primer contenido) */
   thinkingDurationMs?: number
-  /** Métricas de la respuesta (tiempo medido en Rust + tokens aproximados) */
-  metrics?: { elapsedMs: number; tokens: number }
+  /** Métricas de la respuesta: tiempo + tokens (reales si el proveedor los
+   * entrega, estimación chars/4 si no) + tokens de entrada y cacheados */
+  metrics?: {
+    elapsedMs: number
+    tokens: number
+    inputTokens?: number
+    cachedTokens?: number
+  }
 }

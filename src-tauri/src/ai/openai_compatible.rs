@@ -5,7 +5,7 @@ use tauri::ipc::Channel;
 use crate::ai::{
     extract_sse_data_lines, http_client, send_with_retries, strip_code_fences,
     truncate_chars_end, truncate_chars_start, ChatMessage, CompletionRequest, ModelInfo, Provider,
-    ProviderInfo, StreamChunk, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
+    ProviderInfo, StreamChunk, StreamUsage, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
 };
 
 /// Adaptador genérico para proveedores con formato OpenAI-compatible:
@@ -64,14 +64,21 @@ impl Provider for OpenAiCompatibleProvider {
         api_key: Option<String>,
         thinking: Option<ThinkingLevel>,
         channel: &Channel<StreamChunk>,
-    ) -> Result<u64, String> {
+    ) -> Result<StreamUsage, String> {
         let url = format!("{}{}", self.info.base_url, self.info.chat_path);
         let msgs: Vec<serde_json::Value> = messages
             .iter()
             .map(|m| json!({ "role": m.role, "content": m.content }))
             .collect();
 
-        let mut body = json!({ "model": model, "messages": msgs, "stream": true });
+        let mut body = json!({
+            "model": model,
+            "messages": msgs,
+            "stream": true,
+            // Pide el objeto usage al final del stream (OpenAI, DeepSeek, Groq…;
+            // los servidores que no lo soportan lo ignoran)
+            "stream_options": { "include_usage": true },
+        });
         // reasoning_effort solo para modelos que soportan razonamiento
         if let Some(level) = thinking {
             if crate::ai::supports_thinking(&self.info.id, model) {
@@ -86,7 +93,7 @@ impl Provider for OpenAiCompatibleProvider {
 
         let response = send_with_retries(request, Some(channel)).await?;
 
-        let mut generated_chars: u64 = 0;
+        let mut usage = StreamUsage::default();
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
         while let Some(chunk) = stream.next().await {
@@ -94,11 +101,31 @@ impl Provider for OpenAiCompatibleProvider {
             buffer.push_str(&String::from_utf8_lossy(&bytes));
             for data in extract_sse_data_lines(&mut buffer) {
                 if data == "[DONE]" {
-                    return Ok(generated_chars);
+                    return Ok(usage);
                 }
                 let Ok(value) = serde_json::from_str::<serde_json::Value>(&data) else {
                     continue;
                 };
+                // Usage real del proveedor (llega en el último chunk con choices
+                // vacías, o adjunto al último chunk de contenido):
+                // - OpenAI/compatibles: prompt_tokens / completion_tokens /
+                //   prompt_tokens_details.cached_tokens
+                // - DeepSeek: prompt_cache_hit_tokens
+                if let Some(u) = value["usage"].as_object() {
+                    usage.input_tokens = u.get("prompt_tokens").and_then(|v| v.as_u64());
+                    usage.output_tokens = u
+                        .get("completion_tokens")
+                        .and_then(|v| v.as_u64())
+                        .or_else(|| u.get("output_tokens").and_then(|v| v.as_u64()));
+                    usage.cached_tokens = u
+                        .get("prompt_cache_hit_tokens")
+                        .and_then(|v| v.as_u64())
+                        .or_else(|| {
+                            u.get("prompt_tokens_details")
+                                .and_then(|d| d.get("cached_tokens"))
+                                .and_then(|v| v.as_u64())
+                        });
+                }
                 // reasoning_content: razonamiento de modelos tipo DeepSeek R1 / o-series
                 if let Some(reasoning) = value["choices"][0]["delta"]["reasoning_content"].as_str() {
                     if !reasoning.is_empty() {
@@ -109,7 +136,7 @@ impl Provider for OpenAiCompatibleProvider {
                 }
                 if let Some(text) = value["choices"][0]["delta"]["content"].as_str() {
                     if !text.is_empty() {
-                        generated_chars += text.chars().count() as u64;
+                        usage.generated_chars += text.chars().count() as u64;
                         channel
                             .send(StreamChunk::Delta { text: text.to_string() })
                             .map_err(|e| format!("Error de IPC: {e}"))?;
@@ -117,7 +144,7 @@ impl Provider for OpenAiCompatibleProvider {
                 }
             }
         }
-        Ok(generated_chars)
+        Ok(usage)
     }
 
     async fn complete(

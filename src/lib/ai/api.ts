@@ -37,6 +37,8 @@ export interface StreamChunk {
   message?: string
   elapsedMs?: number
   tokens?: number
+  inputTokens?: number
+  cachedTokens?: number
 }
 
 export interface StreamHandlers {
@@ -46,7 +48,11 @@ export interface StreamHandlers {
   onDone: () => void
   onError: (message: string) => void
   onStatus?: (message: string) => void
-  onMetrics?: (elapsedMs: number, tokens: number) => void
+  onMetrics?: (
+    elapsedMs: number,
+    tokens: number,
+    extra?: { inputTokens?: number; cachedTokens?: number },
+  ) => void
 }
 
 export async function listProviders(): Promise<ProviderInfo[]> {
@@ -105,7 +111,10 @@ export async function chatStream(params: ChatParams, handlers: StreamHandlers): 
     else if (chunk.type === 'thinking' && handlers.onThinking) handlers.onThinking(chunk.text ?? '')
     else if (chunk.type === 'status' && handlers.onStatus) handlers.onStatus(chunk.message ?? '')
     else if (chunk.type === 'metrics' && handlers.onMetrics)
-      handlers.onMetrics(chunk.elapsedMs ?? 0, chunk.tokens ?? 0)
+      handlers.onMetrics(chunk.elapsedMs ?? 0, chunk.tokens ?? 0, {
+        inputTokens: chunk.inputTokens,
+        cachedTokens: chunk.cachedTokens,
+      })
     else if (chunk.type === 'done') handlers.onDone()
     else if (chunk.type === 'error') handlers.onError(chunk.message ?? 'Error desconocido')
   }

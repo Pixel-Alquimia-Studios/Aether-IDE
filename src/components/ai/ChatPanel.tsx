@@ -586,7 +586,15 @@ export function ChatPanel() {
                     {msg.metrics && (
                       <div className="mt-1.5 flex justify-end">
                         <span className="text-[10px] tabular-nums text-aether-text-dim/70">
-                          ⚡ {formatElapsed(msg.metrics.elapsedMs)} · ~{msg.metrics.tokens} tokens
+                          ⚡ {formatElapsed(msg.metrics.elapsedMs)} ·{" "}
+                          {msg.metrics.inputTokens != null
+                            ? `${msg.metrics.tokens}`
+                            : `~${msg.metrics.tokens}`}{" "}
+                          tokens
+                          {msg.metrics.inputTokens != null && ` · ↑${msg.metrics.inputTokens}`}
+                          {msg.metrics.cachedTokens != null &&
+                            msg.metrics.cachedTokens > 0 &&
+                            ` · 💰 ${formatTokens(msg.metrics.cachedTokens)} ${t('chat.cachedTokens')}`}
                         </span>
                       </div>
                     )}

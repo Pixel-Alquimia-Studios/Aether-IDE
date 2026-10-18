@@ -168,6 +168,17 @@ pub enum ToolResponse {
     },
 }
 
+/// Uso real de tokens reportado por el proveedor (cuando el stream lo entrega).
+/// `cached_tokens`: tokens servidos DESDE la caché de prompt del proveedor
+/// (cache read); el resto de la entrada se facturó a precio completo.
+#[derive(Debug, Clone, Default)]
+pub struct StreamUsage {
+    pub generated_chars: u64,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cached_tokens: Option<u64>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum StreamChunk {
@@ -176,8 +187,14 @@ pub enum StreamChunk {
     Thinking { text: String },
     /// Aviso de estado mid-stream (p. ej. reintentos por rate limit)
     Status { message: String },
-    /// Métricas de la respuesta: tiempo medido en Rust + tokens aproximados
-    Metrics { elapsed_ms: u64, tokens: u64 },
+    /// Métricas de la respuesta: tiempo + tokens reales si el proveedor los
+    /// entrega (fallback: estimación chars/4) + tokens de entrada y cacheados
+    Metrics {
+        elapsed_ms: u64,
+        tokens: u64,
+        input_tokens: Option<u64>,
+        cached_tokens: Option<u64>,
+    },
     Done,
     /// Parte del contrato IPC: el frontend la maneja para errores mid-stream
     #[allow(dead_code)]
@@ -194,8 +211,9 @@ pub trait Provider: Send + Sync {
 
     async fn fetch_models(&self, api_key: Option<String>) -> Result<Vec<ModelInfo>, String>;
 
-    /// Chat con streaming. Devuelve el número de caracteres generados (para
-    /// métricas); el chunk Done y las Metrics los emite el comando invocador.
+    /// Chat con streaming. Devuelve el uso real de tokens cuando el proveedor
+    /// lo entrega (y chars generados como fallback); el chunk Done y las
+    /// Metrics los emite el comando invocador.
     async fn chat_stream(
         &self,
         model: &str,
@@ -203,7 +221,7 @@ pub trait Provider: Send + Sync {
         api_key: Option<String>,
         thinking: Option<ThinkingLevel>,
         channel: &Channel<StreamChunk>,
-    ) -> Result<u64, String>;
+    ) -> Result<StreamUsage, String>;
 
     /// Autocompletado sin streaming: devuelve el texto a insertar o None
     async fn complete(

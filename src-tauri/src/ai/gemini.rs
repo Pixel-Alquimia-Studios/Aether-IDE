@@ -5,7 +5,7 @@ use tauri::ipc::Channel;
 use crate::ai::{
     error_from_response, extract_sse_data_lines, http_client, send_with_retries,
     truncate_chars_end, truncate_chars_start, ChatMessage, CompletionRequest, ModelInfo, Provider,
-    ProviderInfo, StreamChunk, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
+    ProviderInfo, StreamChunk, StreamUsage, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
 };
 
 pub struct GeminiProvider;
@@ -67,7 +67,7 @@ impl Provider for GeminiProvider {
         api_key: Option<String>,
         thinking: Option<ThinkingLevel>,
         channel: &Channel<StreamChunk>,
-    ) -> Result<u64, String> {
+    ) -> Result<StreamUsage, String> {
         let key = api_key.ok_or_else(|| "API key no configurada".to_string())?;
 
         // Gemini usa "model" como rol del asistente y systemInstruction para los system
@@ -141,11 +141,11 @@ impl Provider for GeminiProvider {
                     }
                 }
                 if value["candidates"][0]["finishReason"].as_str() == Some("STOP") {
-                    return Ok(generated_chars);
+                    return Ok(StreamUsage { generated_chars, ..Default::default() });
                 }
             }
         }
-        Ok(generated_chars)
+        Ok(StreamUsage { generated_chars, ..Default::default() })
     }
 
     async fn complete(
