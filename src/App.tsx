@@ -32,7 +32,10 @@ export default function App() {
   const chatPanelVisible = useUiStore((s) => s.chatPanelVisible)
   const termsDialogOpen = useUiStore((s) => s.termsDialogOpen)
   const [termsVisible, setTermsVisible] = useState(() => !termsAccepted())
+  // Update disponible (persistent mientras la app viva) vs overlay abierto:
+  // "Más tarde" cierra el overlay pero el botón ⬆ debe seguir visible
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null)
+  const [updateOverlayOpen, setUpdateOverlayOpen] = useState(false)
   useKeyboardShortcuts()
   useSession()
 
@@ -75,14 +78,17 @@ export default function App() {
     if (!termsAccepted()) return
     void check()
       .then((update) => {
-        if (update) setAvailableUpdate(update)
+        if (update) {
+          setAvailableUpdate(update)
+          setUpdateOverlayOpen(true)
+        }
       })
       .catch(() => undefined)
   }, [])
 
   return (
     <div className="flex h-full flex-col">
-      <MenuBar availableUpdate={availableUpdate} onOpenUpdate={() => setAvailableUpdate((u) => u)} />
+      <MenuBar availableUpdate={availableUpdate} onOpenUpdate={() => setUpdateOverlayOpen(true)} />
       <div className="flex min-h-0 flex-1">
         <ActivityBar />
         {sidebarVisible && <Sidebar />}
@@ -120,8 +126,8 @@ export default function App() {
       <StatusBar />
       {paletteOpen && <CommandPalette />}
       {/* Fase G: overlay de actualización con progreso */}
-      {availableUpdate && (
-        <UpdateOverlay update={availableUpdate} onClose={() => setAvailableUpdate(null)} />
+      {availableUpdate && updateOverlayOpen && (
+        <UpdateOverlay update={availableUpdate} onClose={() => setUpdateOverlayOpen(false)} />
       )}
     </div>
   )
