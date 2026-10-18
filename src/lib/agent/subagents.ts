@@ -1,9 +1,21 @@
+import { skillsFor } from '@/lib/agent/skills'
 import type { AgentFinding, AgentStep } from '@/types/agent'
+
+import auditbotPrompt from '@/resources/subagents/agents/auditbot.md?raw'
+import bugbotPrompt from '@/resources/subagents/agents/bugbot.md?raw'
+import secbotPrompt from '@/resources/subagents/agents/secbot.md?raw'
 
 // Subagentes de análisis de SOLO LECTURA (v0.1.4): /qa, /security, /audit.
 // Analizan el workspace con herramientas de lectura y emiten un reporte
 // catalogado por severidad. JAMÁS modifican archivos (ni siquiera se les
 // ofrecen las herramientas mutadoras).
+//
+// v0.3.0 (fase D): el prompt base de cada bot vive en
+// src/resources/subagents/agents/*.md (importado como texto en build) y las
+// skills especializadas se inyectan desde src/lib/agent/skills.ts. El system
+// prompt es el primer mensaje del contexto, así que su contenido estable
+// (prompt base + skills en orden alfabético) queda dentro del prefijo
+// cacheable de los proveedores con prompt caching.
 
 export interface SubagentDef {
   id: 'qa' | 'security' | 'audit'
@@ -37,17 +49,9 @@ export const SUBAGENTS: SubagentDef[] = [
     emoji: '🐛',
     name: 'QA',
     description: 'Revisión de calidad: bugs, errores lógicos y edge cases',
-    systemPrompt: `Te llamas BugBot 🐛, el subagente de QA (aseguramiento de calidad) de Aether IDE. Preséntate como BugBot al responder. Tu misión: revisar el código del workspace en busca de BUGS, ERRORES LÓGICOS, EDGE CASES sin manejar, manejo de errores deficiente y código muerto.
-
-${READ_ONLY_RULES}
-
-CLASIFICACIÓN DE SEVERIDAD:
-- critical: bug que rompe funcionalidad principal, crash o pérdida de datos.
-- high: lógica incorrecta clara o bug probable en casos de uso comunes.
-- medium: edge case sin manejar, manejo de errores deficiente.
-- low: code smell, dead code, problemas de mantenibilidad.
-
-${FINDINGS_FORMAT}`,
+    systemPrompt: [bugbotPrompt, READ_ONLY_RULES, skillsFor('qa'), FINDINGS_FORMAT]
+      .filter((part) => part.trim().length > 0)
+      .join('\n\n'),
   },
   {
     id: 'security',
@@ -56,17 +60,9 @@ ${FINDINGS_FORMAT}`,
     emoji: '🛡',
     name: 'Security',
     description: 'Auditoría de seguridad ética: vulnerabilidades y malas prácticas',
-    systemPrompt: `Te llamas SecBot 🛡, el subagente de SEGURIDAD (hacker ético white-hat) de Aether IDE. Preséntate como SecBot al responder. Tu misión: auditar el código en busca de VULNERABILIDADES: inyección (SQL, comandos, XSS), secretos hardcodeados (API keys, passwords), validación de entrada deficiente, path traversal, permisos excesivos, CSP débil, datos sensibles expuestos y dependencias peligrosas.
-
-${READ_ONLY_RULES}
-
-CLASIFICACIÓN DE SEVERIDAD:
-- critical: explotable remotamente, RCE, secretos reales expuestos, inyección confirmada.
-- high: XSS o inyección en código alcanzable, path traversal sin validar.
-- medium: práctica insegura sin exploit directo, validación incompleta.
-- low: hardening, mejores prácticas de seguridad.
-
-${FINDINGS_FORMAT}`,
+    systemPrompt: [secbotPrompt, READ_ONLY_RULES, skillsFor('security'), FINDINGS_FORMAT]
+      .filter((part) => part.trim().length > 0)
+      .join('\n\n'),
   },
   {
     id: 'audit',
@@ -75,19 +71,9 @@ ${FINDINGS_FORMAT}`,
     emoji: '📋',
     name: 'Audit',
     description: 'Auditoría completa: calidad (QA) + seguridad en dos pasadas',
-    systemPrompt: `Te llamas AuditBot 📋, el subagente de AUDITORÍA COMPLETA de Aether IDE: la fusión de BugBot (QA) y SecBot (Seguridad). Preséntate como AuditBot al responder. Realiza DOS pasadas sobre el código: (1) calidad — bugs, errores lógicos, edge cases; (2) seguridad — vulnerabilidades estilo hacker ético (inyección, XSS, secretos hardcodeados, validación deficiente).
-
-${READ_ONLY_RULES}
-
-CLASIFICACIÓN DE SEVERIDAD:
-- critical: crash/pérdida de datos, o explotable remotamente / secretos reales.
-- high: bug probable en uso común, o XSS/inyección confirmada.
-- medium: edge case sin manejar, o práctica insegura sin exploit directo.
-- low: code smell / mantenibilidad, o hardening.
-
-En el campo detail indica si el hallazgo es de CALIDAD o de SEGURIDAD.
-
-${FINDINGS_FORMAT}`,
+    systemPrompt: [auditbotPrompt, READ_ONLY_RULES, skillsFor('audit'), FINDINGS_FORMAT]
+      .filter((part) => part.trim().length > 0)
+      .join('\n\n'),
   },
 ]
 
