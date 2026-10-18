@@ -6,7 +6,7 @@
 
 React + TypeScript · Rust (Tauri v2) · Monaco Editor
 
-[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.2.2-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
+[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.3.0-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
@@ -47,7 +47,19 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.2.2 *(actual)*
+### v0.3.0 *(actual)*
+
+> 🚀 Los releases se publican automáticamente con GitHub Actions — instaladores y `latest.json` del actualizador en [GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest).
+
+| Archivo | Tipo |
+|---|---|
+| [aether-ide-0.3.0-x64-setup.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador NSIS (Windows x64) |
+| [aether-ide-0.3.0-x64.msi](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador MSI (Windows x64) |
+| [aether-ide-0.3.0-x64-portable.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | **Portable** — ejecutable suelto, sin instalación |
+
+> ⬆ Los usuarios de v0.2.2+ reciben esta actualización automáticamente (botón **⬆ Actualizar**).
+
+### v0.2.2
 
 > 🚀 **A partir de esta versión los releases se publican automáticamente con GitHub Actions** — los instaladores y el archivo `latest.json` del actualizador automático viven en [GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest).
 
@@ -109,6 +121,19 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.3.0
+
+**Añadido**
+- **Cache de prompt (context cache)**: Anthropic con `cache_control` efímero sobre system y último mensaje user; `stream_options.include_usage` en los 10 proveedores OpenAI-compatibles; métricas con **tokens reales** (adiós a la estimación chars/4) e indicador `💰 N cacheados` por respuesta — las conversaciones largas con Claude cuestan ~10× menos
+- **Skills especializadas para subagentes**: checklists de QA/seguridad inyectados al system prompt de BugBot/SecBot/AuditBot, adaptados de [affaan-m/ECC](https://github.com/affaan-m/ECC) (MIT, ver `THIRD_PARTY_NOTICES.md`); carga determinista (orden alfabético) dentro del prefijo cacheable
+- **Prompts base de subagentes en recursos versionados** (`src/resources/subagents/`) — un skill nuevo `.md` con frontmatter "aparece solo" vía `import.meta.glob`
+- **Menú de comandos `/`** en el chat: filtrado difuso, avatares con color de cada bot, navegación por teclado (↑/↓/Enter/Tab/Esc) — reemplaza los 3 chips
+- **Visualizador de imágenes en el editor**: png/jpg/gif/webp/bmp/ico/svg/avif con zoom (+/−/100%/ajustar), barra de dimensiones y peso; lectura binaria segura (`read_file_base64` en Rust)
+- Evaluación de **Velopack** documentada (`docs/VELOPACK_EVAL.md`): deltas medidos de 20 KB vs 8,3 MB full
+
+**Corregido**
+- Lint warnings de React (set-state-in-effect, exhaustive-deps) en el visor y el gutter diff
 
 ### v0.2.2
 
