@@ -6,4 +6,8 @@ export interface EditorTab {
   content: string
   language: string
   isDirty: boolean
+  /** Tipo de tab: texto (Monaco) o imagen (visualizador). Default: text */
+  kind?: 'text' | 'image'
+  /** Data URL de la imagen (solo kind === 'image') */
+  dataUrl?: string
 }

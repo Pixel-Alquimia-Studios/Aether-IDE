@@ -1,11 +1,31 @@
 import { create } from 'zustand'
 
 import { getLanguageFromPath } from '@/lib/workspace/language'
-import { pickSaveFile, writeFile as fsWriteFile } from '@/lib/workspace/fs'
+import {
+  pickSaveFile,
+  readFileBase64,
+  writeFile as fsWriteFile,
+} from '@/lib/workspace/fs'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import { getEditorInstance } from '@/lib/monaco/editorRef'
 import { useUiStore } from '@/stores/uiStore'
 import type { EditorTab } from '@/types/editor'
+
+// Extensiones que se abren en el visualizador de imágenes (v0.3.0, fase B)
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif'])
+
+export function isImagePath(path: string): boolean {
+  const ext = (path.split('.').pop() ?? '').toLowerCase()
+  return IMAGE_EXTENSIONS.has(ext)
+}
+
+/** MIME type correspondiente a la extensión de imagen */
+function imageMime(path: string): string {
+  const ext = (path.split('.').pop() ?? '').toLowerCase()
+  if (ext === 'svg') return 'image/svg+xml'
+  if (ext === 'jpg') return 'image/jpeg'
+  return `image/${ext}`
+}
 
 // Temporizadores del auto-guardado (menú Archivo → Auto Save), uno por
 // pestaña: un debounce global único cancelaba el guardado pendiente de una
@@ -52,8 +72,24 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       return
     }
     try {
-      const content = await useWorkspaceStore.getState().readFile(path)
       const name = path.split(/[\\/]/).pop() ?? path
+      // Imágenes: lectura binaria → data URL; el tab se renderiza con el
+      // visualizador (sin Monaco, sin edición, sin dirty)
+      if (isImagePath(path)) {
+        const base64 = await readFileBase64(path)
+        const tab: EditorTab = {
+          id: path,
+          title: name,
+          content: '',
+          language: 'image',
+          isDirty: false,
+          kind: 'image',
+          dataUrl: `data:${imageMime(path)};base64,${base64}`,
+        }
+        set({ tabs: [...get().tabs, tab], activeTabId: tab.id, error: null })
+        return
+      }
+      const content = await useWorkspaceStore.getState().readFile(path)
       const tab: EditorTab = {
         id: path,
         title: name,
@@ -179,6 +215,17 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     if (!tab) return
     if (!force && tab.isDirty) return
     try {
+      // Imágenes: re-leer el binario y reconstruir el data URL
+      if (tab.kind === 'image') {
+        const base64 = await readFileBase64(path)
+        const dataUrl = `data:${imageMime(path)};base64,${base64}`
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            t.id === path && t.dataUrl !== dataUrl ? { ...t, dataUrl } : t,
+          ),
+        }))
+        return
+      }
       const content = await useWorkspaceStore.getState().readFile(path)
       set((state) => ({
         tabs: state.tabs.map((t) =>
@@ -201,6 +248,8 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     const activeTabId = get().activeTabId
     const tab = get().tabs.find((t) => t.id === activeTabId)
     if (!activeTabId || !tab) return
+    // Las imágenes no se editan: el atajo de insertar no aplica
+    if (tab.kind === 'image') return
 
     const editor = getEditorInstance()
     if (editor) {

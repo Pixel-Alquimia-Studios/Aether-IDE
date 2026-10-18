@@ -14,6 +14,14 @@ export async function readFile(path: string): Promise<string> {
   return MOCK_FILE_CONTENTS[path] ?? `// ${path}\n`
 }
 
+/** Lectura binaria (imágenes) codificada en base64 para el visualizador */
+export async function readFileBase64(path: string): Promise<string> {
+  if (isTauri()) {
+    return invoke<string>('read_file_base64', { path })
+  }
+  throw new Error('El visualizador de imágenes requiere la app de escritorio')
+}
+
 export async function writeFile(path: string, content: string): Promise<void> {
   if (isTauri()) {
     await invoke('write_file', { path, content })

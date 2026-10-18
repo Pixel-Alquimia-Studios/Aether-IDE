@@ -11,6 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
+            commands::read_file_base64,
             commands::read_file_range,
             commands::file_exists,
             commands::write_file,

@@ -40,6 +40,16 @@ pub fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("No se pudo leer '{path}': {e}"))
 }
 
+/// Lectura binaria segura para el visualizador de imágenes: devuelve el
+/// contenido del archivo codificado en base64 (data URL lo construye el
+/// frontend según la extensión)
+#[tauri::command]
+pub fn read_file_base64(path: String) -> Result<String, String> {
+    let bytes = fs::read(&path).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
+    use base64::Engine as _;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadRange {

@@ -6,6 +6,7 @@ import Editor from '@monaco-editor/react'
 // Side-effect: workers locales + tema aether-dark + instancia local de Monaco
 import '@/lib/monaco/setup'
 import { InlineEditWidget } from '@/components/editor/InlineEditWidget'
+import { ImageViewer } from '@/components/editor/ImageViewer'
 import { useEditorStore } from '@/stores/editorStore'
 import { setEditorInstance, getEditorInstance } from '@/lib/monaco/editorRef'
 import { useGitStore } from '@/stores/gitStore'
@@ -30,10 +31,12 @@ export function EditorView() {
   const diffByPath = useGitStore((s) => s.diffByPath)
   const fetchDiff = useGitStore((s) => s.fetchDiff)
   const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
+  const isImageTab = activeTab?.kind === 'image'
 
   useEffect(() => {
     const editor = getEditorInstance()
-    if (!editor || !activeTabId || !rootPath) return
+    // Sin gutter para tabs de imagen (no hay editor activo ni diff que mostrar)
+    if (!editor || !activeTabId || !rootPath || isImageTab) return
     const lines = diffByPath[activeTabId]
     if (lines === undefined) {
       void fetchDiff(activeTabId)
@@ -51,7 +54,7 @@ export function EditorView() {
     } else {
       decorationsRef.current = editor.createDecorationsCollection(decorations)
     }
-  }, [activeTabId, diffByPath, rootPath, fetchDiff])
+  }, [activeTabId, diffByPath, rootPath, fetchDiff, isImageTab])
 
   if (tabs.length === 0) {
     return (
@@ -99,29 +102,33 @@ export function EditorView() {
         })}
       </div>
 
-      {/* Monaco Editor */}
-      {activeTab && (
-        <Editor
-          path={activeTab.id}
-          language={activeTab.language}
-          value={activeTab.content}
-          theme="aether-dark"
-          onChange={(value) => updateContent(activeTab.id, value ?? '')}
-          onMount={(editor) => setEditorInstance(editor)}
-          loading={<div className="p-4 text-aether-text-dim">Cargando editor…</div>}
-          options={{
-            fontSize: 13,
-            fontFamily: "'Cascadia Code', Consolas, monospace",
-            fontLigatures: true,
-            tabSize: 2,
-            automaticLayout: true,
-            minimap: { enabled: true },
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            cursorBlinking: 'smooth',
-            padding: { top: 8 },
-          }}
-        />
+      {/* Contenido: Monaco para texto, visualizador para imágenes */}
+      {activeTab?.kind === 'image' ? (
+        <ImageViewer tab={activeTab} />
+      ) : (
+        activeTab && (
+          <Editor
+            path={activeTab.id}
+            language={activeTab.language}
+            value={activeTab.content}
+            theme="aether-dark"
+            onChange={(value) => updateContent(activeTab.id, value ?? '')}
+            onMount={(editor) => setEditorInstance(editor)}
+            loading={<div className="p-4 text-aether-text-dim">Cargando editor…</div>}
+            options={{
+              fontSize: 13,
+              fontFamily: "'Cascadia Code', Consolas, monospace",
+              fontLigatures: true,
+              tabSize: 2,
+              automaticLayout: true,
+              minimap: { enabled: true },
+              scrollBeyondLastLine: false,
+              smoothScrolling: true,
+              cursorBlinking: 'smooth',
+              padding: { top: 8 },
+            }}
+          />
+        )
       )}
 
       {/* Edit with prompt (Ctrl+I): diff inline sobre la selección */}
