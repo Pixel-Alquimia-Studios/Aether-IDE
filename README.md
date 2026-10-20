@@ -6,7 +6,7 @@
 
 React + TypeScript · Rust (Tauri v2) · Monaco Editor
 
-[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.3.0-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
+[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.3.1-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
@@ -47,9 +47,19 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.3.0 *(actual)*
+### v0.3.1 *(actual)*
 
 > 🚀 Los releases se publican automáticamente con GitHub Actions ([GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest)) y se espejan en `downloads/` del repo por si acaso.
+
+| Archivo | Tipo |
+|---|---|
+| [aether-ide-0.3.1-x64-setup.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador NSIS (Windows x64) |
+| [aether-ide-0.3.1-x64.msi](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador MSI (Windows x64) |
+| [aether-ide-0.3.1-x64-portable.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | **Portable** — ejecutable suelto, sin instalación |
+
+> ⬆ Los usuarios de v0.3.0+ reciben esta actualización automáticamente (botón **⬆ Actualizar**).
+
+### v0.3.0
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
@@ -57,7 +67,7 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 | [aether-ide-0.3.0-x64-setup.exe](downloads/0.3.0/aether-ide-0.3.0-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,62 MB |
 | [aether-ide-0.3.0-x64.msi](downloads/0.3.0/aether-ide-0.3.0-x64.msi) | Instalador MSI (Windows x64) | 6,63 MB |
 
-> ⬆ Los usuarios de v0.2.2+ reciben esta actualización automáticamente (botón **⬆ Actualizar**).
+> 🚀 Los releases se publican automáticamente con GitHub Actions ([GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest)) y se espejan en `downloads/` del repo por si acaso.
 
 ### v0.2.2
 
@@ -119,6 +129,46 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.3.1
+
+Release de **endurecimiento (hardening)**: sin features nuevas — auditoría completa de seguridad y bugs (40+ hallazgos, todos verificados contra el código) y sus correcciones.
+
+**Corregido — Seguridad**
+- **CRÍTICO**: el diálogo de confirmación del agente estaba **muerto desde la v0.1.4** — el primer `write_file`/`execute_command` colgaba el bucle para siempre y la confirmación prometida en la UI no existía. Restaurado en el panel de chat mostrando la ruta y el **contenido completo** antes de aprobar, con **auto-denegación** al pulsar Detener o cambiar de workspace
+- **Contención de rutas en el backend**: el workspace ahora vive en el estado de Rust (se fija al abrir carpeta o restaurar sesión) y los comandos usados por el agente (`read_file`, `read_file_range`, `read_file_base64`, `write_file`, `read_dir`, `search_files`, `execute_command`, `delete_file`, `file_exists`) **ignoran el root que envíe el frontend** y se contienen contra él — resiste `..`, symlinks/junctions hacia fuera, UNC, nombres reservados de Windows (CON, NUL…), streams alternos (`file.txt:ads`) y prefijos `\\?\` (9 tests). Archivo → Abrir archivo sigue funcionando mediante comandos de usuario separados
+- **Subagentes de solo lectura con hard-deny**: aunque el modelo alucine una herramienta mutadora que no le fue ofrecida, el bucle la rechaza
+- **Workflow de release**: las 6 GitHub Actions fijadas por SHA de commit (la de tauri-action corría con el token de publicación y la llave de firma del updater en su entorno); CSP recortada — fuera `github.com`/`api.github.com`/`raw.githubusercontent.com` de `connect-src` (canales de exfiltración muertos)
+- Los cuerpos de error de los proveedores se truncan antes de mostrarse en el chat (texto controlado por terceros)
+
+**Corregido — Streams y agente**
+- Stop del chat ya no falla en silencio durante la ventana de reintentos de IPC: token de generación por stream — un stream "resucitado" no puede pisar el mensaje nuevo ni romper el Stop del siguiente
+- Cambiar de workspace con un stream o el agente en vuelo **cancela todo** (antes el agente seguía escribiendo en la carpeta vieja y `streaming` quedaba pegado)
+- Reanudar un chat o cambiar de modo ya no es posible mientras el agente corre (contaminación cruzada de chats); borrar el chat activo limpia sus pasos de agente
+- Stop del agente aborta también el paso LLM en vuelo (`chat_stop` en Rust) — antes solo era cooperativo
+- Doble Enter rápido ya no lanza dos streams concurrentes (`streaming` síncrono)
+- El timeline unificado conserva el orden real tras reanudar (los `ts` de los mensajes ahora se persisten)
+- Time Travel ya no puede ser deshecho por Auto Save (los timers se cancelan **antes** de restaurar); `saveTab` ya no pierde keystrokes escritos durante su propia escritura
+
+**Corregido — Terminal, Git y robustez**
+- **La terminal sobrevive a Ctrl+J** (queda montada y oculta — `npm run dev` ya no muere al cerrar el panel); shell muerta avisa con `[Proceso terminado]` + botón ↻ Reiniciar; todas las shells se matan al cerrar la app (sin procesos huérfanos); resize perdido tras el spawn se sincroniza; CWD sin workspace → home del usuario (antes System32)
+- **Terminal sin mojibake**: decoder UTF-8 incremental — un carácter multibyte partido entre lecturas ya no se corrompe
+- **Git con rutas unicode** (`core.quotepath=off`): "José/año.md" ya no llega escapado — stage/diff/delete funcionaban mal con acentos
+- **execute_command con timeout**: 120 s por defecto, el agente puede subirlo a 600 s (`timeout`); al vencer se mata el **árbol** del proceso y se avisa; salida leída incrementalmente (sin buffer completo antes de truncar)
+- El watcher ya no vigila `node_modules`/`target`/`dist` (tormentas de refresh en installs/builds)
+- **Límites de lectura**: archivos >20 MB se rechazan con error claro (antes congelaban/reventaban el WebView); `read_file_range` escanea por bytes con captura acotada (2 MB/sección) en archivos grandes
+- `session.json` corrupto se **cuarentena** y la app arranca limpia (antes rompía la restauración para siempre)
+- Los errores del editor ya son visibles (banner rojo descartable — antes fallaba en silencio); `activeTab` colgante validado al restaurar; fallos de `saveSession` sin rechazos no manejados; Stop sin línea fantasma "⏹ Detenido" en modo agente
+
+**Añadido**
+- Parámetro `timeout` (1–600 s) en la herramienta `execute_command` del agente
+- **20 tests unitarios de Rust**: contención de rutas (9), decoder UTF-8 (5), timeout/kill de comandos (2), límites y captura por secciones (4)
+
+**Limitaciones conocidas** (diferidas a 0.4.x)
+- Los checkpoints del Time Travel **no sobreviven a un reinicio** de la app (viven en memoria): tras recargar, editar/eliminar un mensaje anterior revierte el historial del chat pero no los archivos
+- Archivos UTF-16 no se abren (error visible ahora); el BOM UTF-8 se preserva solo si no se edita la primera línea
+- Sin backpressure en el PTY (una salida masiva puede crecer en memoria del webview)
+- El modo agente/subagentes no reporta tokens reales ni cacheados (solo el chat streaming)
 
 ### v0.3.0
 
