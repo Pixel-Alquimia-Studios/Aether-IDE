@@ -344,16 +344,18 @@ pub fn watch_workspace(
     let (tx, rx) = mpsc::channel::<Vec<String>>();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
         let Ok(event) = res else { return };
-        // Ignorar metadatos de git y temporales propios: evita un bucle
-        // (git status â†’ escribe .git â†’ watcher â†’ refresh â†’ git statusâ€¦)
-        let in_git_dir = event
-            .paths
-            .iter()
-            .any(|p| {
-                let s = p.to_string_lossy();
-                s.contains("/.git/") || s.contains("\\.git\\") || s.ends_with("/.git") || s.ends_with("\\.git")
-            });
-        if in_git_dir {
+        // M10 (v0.3.1): ignora .git Y los directorios de dependencias/build
+        // (node_modules, target, dist…) — un npm install generaba tormentas
+        // de eventos con re-reads completos del árbol y git status repetidos
+        let ignored = event.paths.iter().any(|p| {
+            let s = p.to_string_lossy().replace('\\', "/");
+            s.contains("/.git/")
+                || s.ends_with("/.git")
+                || IGNORED_DIRS
+                    .iter()
+                    .any(|d| s.contains(&format!("/{d}/")) || s.ends_with(&format!("/{d}")))
+        });
+        if ignored {
             return;
         }
         let relevant = match &event.kind {
@@ -557,10 +559,11 @@ fn search_dir(dir: &Path, query: &str, limit: usize, hits: &mut Vec<SearchHit>) 
 }
 
 #[tauri::command]
-pub fn execute_command(
+pub async fn execute_command(
     state: State<'_, WorkspaceState>,
     command: String,
     cwd: String,
+    timeout: Option<u64>,
 ) -> Result<CommandOutput, String> {
     if command.trim().is_empty() {
         return Err("Comando vacÃ­o".to_string());
@@ -573,6 +576,18 @@ pub fn execute_command(
     } else {
         ensure_in_workspace(&workspace, Path::new(&cwd))?
     };
+    // M1 (v0.3.1): 120 s por defecto; el agente puede subirlo hasta 600 s
+    let timeout_secs = timeout.unwrap_or(120).clamp(1, 600);
+    run_command_with_timeout(&command, &cwd_path, Duration::from_secs(timeout_secs)).await
+}
+
+async fn run_command_with_timeout(
+    command: &str,
+    cwd_path: &Path,
+    timeout: Duration,
+) -> Result<CommandOutput, String> {
+    use std::process::Stdio;
+    use tokio::io::AsyncReadExt;
 
     #[cfg(target_os = "windows")]
     let mut cmd = {
@@ -580,7 +595,7 @@ pub fn execute_command(
         // Forzamos salida UTF-8 para que los acentos no lleguen con mojibake.
         // El `exit` final preserva el cÃ³digo real: sin Ã©l, powershell.exe
         // colapsaba los cÃ³digos nativos (p. ej. `cmd /c exit 5`) a 0/1.
-        let mut c = Command::new("powershell.exe");
+        let mut c = tokio::process::Command::new("powershell.exe");
         c.args([
             "-NoProfile",
             "-NonInteractive",
@@ -594,20 +609,98 @@ pub fn execute_command(
     };
     #[cfg(not(target_os = "windows"))]
     let mut cmd = {
-        let mut c = Command::new("sh");
-        c.args(["-c", &command]);
+        let mut c = tokio::process::Command::new("sh");
+        c.args(["-c", command]);
         c
     };
 
-    cmd.current_dir(&cwd_path);
-    let output = cmd
-        .output()
+    cmd.current_dir(cwd_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        // Backstop: si el futuro se abandona (cancelaciÃ³n), el hijo muere
+        .kill_on_drop(true);
+
+    let mut child = cmd
+        .spawn()
         .map_err(|e| format!("No se pudo ejecutar el comando: {e}"))?;
-    Ok(CommandOutput {
-        exit_code: output.status.code().unwrap_or(-1),
-        stdout: String::from_utf8_lossy(&output.stdout).chars().take(8000).collect(),
-        stderr: String::from_utf8_lossy(&output.stderr).chars().take(4000).collect(),
-    })
+    let pid = child.id();
+    let mut stdout_pipe = child
+        .stdout
+        .take()
+        .ok_or_else(|| "No se pudo capturar stdout".to_string())?;
+    let mut stderr_pipe = child
+        .stderr
+        .take()
+        .ok_or_else(|| "No se pudo capturar stderr".to_string())?;
+
+    // M1: lectura INCREMENTAL con decoder UTF-8 y tope de chars — se sigue
+    // drenando el pipe (para que el hijo no se bloquee) aunque ya no se
+    // guarde mÃ¡s salida, en vez de bufferear todo y truncar al final
+    async fn drain_pipe<R: tokio::io::AsyncRead + Unpin>(
+        pipe: &mut R,
+        decoder: &mut crate::pty::Utf8Decoder,
+        cap: usize,
+    ) -> String {
+        let mut out = String::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            match pipe.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    if out.chars().count() < cap {
+                        out.push_str(&decoder.feed(&buf[..n]));
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        out.push_str(&decoder.flush());
+        out
+    }
+
+    let mut out_dec = crate::pty::Utf8Decoder::new();
+    let mut err_dec = crate::pty::Utf8Decoder::new();
+    let wait_all = async {
+        let (out, err, status) = tokio::join!(
+            drain_pipe(&mut stdout_pipe, &mut out_dec, 8000),
+            drain_pipe(&mut stderr_pipe, &mut err_dec, 4000),
+            child.wait(),
+        );
+        (out, err, status)
+    };
+
+    match tokio::time::timeout(timeout, wait_all).await {
+        Ok((out, err, Ok(status))) => Ok(CommandOutput {
+            exit_code: status.code().unwrap_or(-1),
+            stdout: out.chars().take(8000).collect(),
+            stderr: err.chars().take(4000).collect(),
+        }),
+        Ok((_, _, Err(e))) => Err(format!("Error esperando el comando: {e}")),
+        Err(_) => {
+            kill_process_tree(pid);
+            Err(format!(
+                "El comando excediÃ³ el timeout de {} s y fue TERMINADO (sube el parÃ¡metro 'timeout' hasta 600 si necesita mÃ¡s tiempo)",
+                timeout.as_secs()
+            ))
+        }
+    }
+}
+
+/// Mata el proceso (y su Ã¡rbol en Windows) tras un timeout (M1)
+fn kill_process_tree(pid: Option<u32>) {
+    let Some(pid) = pid else { return };
+    #[cfg(target_os = "windows")]
+    {
+        // /T mata el ÃRBOL completo (hijos de la shell incluidos)
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Best-effort: hijo directo (sin libc, sin killpg)
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
+    }
 }
 
 // --- IntegraciÃ³n Git (Fase 4.3) ---
@@ -631,6 +724,10 @@ pub struct DiffLine {
 
 fn run_git(root: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new("git")
+        // B6 (v0.3.1): rutas con no-ASCII SIN C-quoting — con el default
+        // quotepath=true, "José/año.md" llegaba escapado y stage/diff/delete
+        // fallaban con "pathspec did not match"
+        .args(["-c", "core.quotepath=off"])
         .args(args)
         .current_dir(root)
         .output()
@@ -977,6 +1074,47 @@ mod tests {
         fs::write(&file, "x").unwrap();
         let verbatim = format!("\\\\?\\{}", file.display());
         assert!(ensure_in_workspace(&root, Path::new(&verbatim)).is_ok());
+        cleanup(&root);
+    }
+
+    #[tokio::test]
+    async fn execute_command_timeout_mata_el_proceso() {
+        // M1: un comando que duerme más que el límite muere con error claro
+        let root = tmp_dir("timeout");
+        let cmd = if cfg!(windows) {
+            "Start-Sleep -Seconds 30"
+        } else {
+            "sleep 30"
+        };
+        let start = std::time::Instant::now();
+        let result = run_command_with_timeout(cmd, &root, Duration::from_millis(800)).await;
+        let elapsed = start.elapsed();
+        assert!(result.is_err(), "el comando colgante debe devolver Err");
+        assert!(
+            result.unwrap_err().contains("timeout"),
+            "el error debe indicar que fue por timeout"
+        );
+        assert!(
+            elapsed < Duration::from_secs(15),
+            "el kill debió ocurrir a los ~0.8s, tardó {elapsed:?}"
+        );
+        cleanup(&root);
+    }
+
+    #[tokio::test]
+    async fn execute_command_comando_rapido_funciona() {
+        // Contraste: un comando que termina dentro del timeout devuelve salida
+        let root = tmp_dir("quick");
+        let cmd = if cfg!(windows) {
+            "$env:AETHER_TEST = 'ok'; Write-Output $env:AETHER_TEST"
+        } else {
+            "echo ok"
+        };
+        let result = run_command_with_timeout(cmd, &root, Duration::from_secs(30))
+            .await
+            .unwrap();
+        assert_eq!(result.exit_code, 0);
+        assert!(result.stdout.contains("ok"), "stdout: {}", result.stdout);
         cleanup(&root);
     }
 }

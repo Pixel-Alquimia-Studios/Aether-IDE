@@ -64,10 +64,16 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     name: 'execute_command',
     description:
-      'Ejecuta un comando en la terminal del proyecto y devuelve exit code, stdout y stderr. En Windows se ejecuta con PowerShell (usa cmdlets: "Get-Content", "Get-ChildItem"; las rutas con espacios SIEMPRE entre comillas dobles); en Unix, con sh. El comando se ejecuta con el workspace como directorio actual (no necesitas "cd"). REQUIERE confirmación del usuario. Parámetros: {"command": "comando a ejecutar"}',
+      'Ejecuta un comando en la terminal del proyecto y devuelve exit code, stdout y stderr. En Windows se ejecuta con PowerShell (usa cmdlets: "Get-Content", "Get-ChildItem"; las rutas con espacios SIEMPRE entre comillas dobles); en Unix, con sh. El comando se ejecuta con el workspace como directorio actual (no necesitas "cd"). Timeout: 120s por defecto; usa el parámetro "timeout" (1-600, en SEGUNDOS) para comandos largos — al vencer, el proceso se TERMINA. REQUIERE confirmación del usuario. Parámetros: {"command": "comando a ejecutar", "timeout": 300}',
     parameters: {
       type: 'object',
-      properties: { command: { type: 'string', description: 'Comando a ejecutar' } },
+      properties: {
+        command: { type: 'string', description: 'Comando a ejecutar' },
+        timeout: {
+          type: 'number',
+          description: 'Timeout en segundos (opcional, 1-600; default 120)',
+        },
+      },
       required: ['command'],
     },
   },
@@ -229,9 +235,15 @@ export async function runTool(
           command,
         })
         if (!approved) return 'DENEGADO: el usuario no aprobó ejecutar este comando.'
+        // M1: timeout opcional del agente (segundos, el backend lo capta a 600)
+        const timeoutArg = typeof args.timeout === 'number' ? args.timeout : undefined
         const output = await invoke<{ exitCode: number; stdout: string; stderr: string }>(
           'execute_command',
-          { command, cwd: workspaceRoot },
+          {
+            command,
+            cwd: workspaceRoot,
+            timeout: timeoutArg ?? null,
+          },
         )
         return truncateOutput(
           `Exit code: ${output.exitCode}\nstdout:\n${output.stdout}\nstderr:\n${output.stderr}`,

@@ -59,6 +59,13 @@ pub fn run() {
             pty::terminal_resize,
             pty::terminal_kill,
         ])
-        .run(tauri::generate_context!())
-        .expect("error mientras se ejecutaba Aether IDE");
+        .build(tauri::generate_context!())
+        .expect("error mientras se ejecutaba Aether IDE")
+        .run(|_app, event| {
+            // M13 (v0.3.1): al cerrar la app, mata TODAS las shells de las
+            // terminales — sin procesos huérfanos
+            if let tauri::RunEvent::Exit = event {
+                pty::kill_all_terminals();
+            }
+        });
 }

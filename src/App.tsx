@@ -112,24 +112,28 @@ export default function App() {
           }}
         />
       )}
-      {/* Panel inferior: terminal integrada (Ctrl+J) */}
-      {panelVisible && (
-        <div className="flex h-56 shrink-0 flex-col border-t border-aether-border bg-aether-bg">
-          <div className="flex items-center justify-between border-b border-aether-border bg-aether-surface px-3 py-1 text-[11px] font-semibold tracking-wider text-aether-text-dim uppercase">
-            <span>Terminal</span>
-            <button
-              title="Cerrar panel"
-              onClick={() => togglePanel()}
-              className="rounded px-1.5 text-aether-text-dim hover:bg-white/10"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="min-h-0 flex-1">
-            <TerminalView />
-          </div>
+      {/* Panel inferior: terminal integrada (Ctrl+J). B4 (v0.3.1): SIEMPRE
+          montada — ocultar con CSS en vez de desmontar, así la PTY y sus
+          procesos (npm run dev, servidores) sobreviven a Ctrl+J */}
+      <div
+        className={`h-56 shrink-0 flex-col border-t border-aether-border bg-aether-bg ${
+          panelVisible ? 'flex' : 'hidden'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-aether-border bg-aether-surface px-3 py-1 text-[11px] font-semibold tracking-wider text-aether-text-dim uppercase">
+          <span>Terminal</span>
+          <button
+            title="Cerrar panel"
+            onClick={() => togglePanel()}
+            className="rounded px-1.5 text-aether-text-dim hover:bg-white/10"
+          >
+            ✕
+          </button>
         </div>
-      )}
+        <div className="min-h-0 flex-1">
+          <TerminalView />
+        </div>
+      </div>
       <StatusBar />
       {paletteOpen && <CommandPalette />}
       {/* Fase G: overlay de actualización con progreso */}
