@@ -42,7 +42,9 @@ export function useSession(): void {
     let cancelled = false
 
     const restore = async (): Promise<void> => {
-      const session = await loadSession()
+      // M11: si session.json está corrupto, loadSession lo cuarentena y
+      // devuelve null — aquí además blindamos con catch (rechazo silencioso)
+      const session = await loadSession().catch(() => null)
       if (!session || cancelled) return
 
       if (session.activeView) {
@@ -123,7 +125,9 @@ export function useSession(): void {
           await useEditorStore.getState().openFile(path)
           if (cancelled) return
         }
-        if (session.activeTab) {
+        // LOW: activeTab se valida contra las tabs realmente restauradas —
+        // un id colgante dejaba el panel del editor vacío sin mensaje
+        if (session.activeTab && useEditorStore.getState().tabs.some((t) => t.id === session.activeTab)) {
           useEditorStore.getState().setActiveTab(session.activeTab)
         }
         await watchWorkspace(session.rootPath)
@@ -138,7 +142,9 @@ export function useSession(): void {
     const schedule = (): void => {
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {
-        void saveSession(buildSession())
+        // LOW: fallo de disco/permisos al guardar sesión — silencioso pero
+        // sin rechazo no manejado (el estado en pantalla sigue siendo verdad)
+        void saveSession(buildSession()).catch(() => undefined)
       }, 800)
     }
     // Persistencia del chat activo (mensajes + pasos del agente) con debounce:

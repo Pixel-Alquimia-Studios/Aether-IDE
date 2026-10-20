@@ -23,6 +23,8 @@ export function EditorView() {
   const setActiveTab = useEditorStore((s) => s.setActiveTab)
   const closeTab = useEditorStore((s) => s.closeTab)
   const updateContent = useEditorStore((s) => s.updateContent)
+  const editorError = useEditorStore((s) => s.error)
+  const clearEditorError = () => useEditorStore.setState({ error: null })
   const inlineEditOpen = useUiStore((s) => s.inlineEditOpen)
   const activeTab = tabs.find((t) => t.id === activeTabId)
 
@@ -69,6 +71,22 @@ export function EditorView() {
 
   return (
     <div className="relative flex min-w-0 flex-1 flex-col">
+      {/* LOW (v0.3.1): los errores del editor ya no son invisibles — antes
+          fallaba en silencio abrir un archivo ilegible/demasiado grande */}
+      {editorError && (
+        <div className="flex items-center gap-2 border-b border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[12px] text-red-400">
+          <span className="min-w-0 flex-1 truncate" title={editorError}>
+            ⚠ {editorError}
+          </span>
+          <button
+            title="Descartar"
+            onClick={clearEditorError}
+            className="rounded px-1 hover:bg-white/10"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Barra de tabs */}
       <div className="flex h-9 items-stretch overflow-x-auto border-b border-aether-border bg-aether-surface">
         {tabs.map((tab) => {

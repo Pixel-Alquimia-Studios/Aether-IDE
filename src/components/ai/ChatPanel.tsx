@@ -851,7 +851,10 @@ export function ChatPanel() {
             <button
               title={t('chat.stop')}
               onClick={() => {
-                void useChatStore.getState().cancelStream()
+                // LOW: solo cancelStream si hay stream — en modo agente puro
+                // plantaba una línea fantasma "⏹ Detenido" bajo el timeline
+                const chat = useChatStore.getState()
+                if (chat.streaming) chat.cancelStream()
                 useAgentStore.getState().stopAgent()
               }}
               className="rounded border border-red-500/40 px-3 py-2 text-[13px] font-medium text-red-400 hover:bg-red-500/10"

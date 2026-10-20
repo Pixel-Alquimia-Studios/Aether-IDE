@@ -252,7 +252,15 @@ pub(crate) fn http_client() -> reqwest::Client {
 
 pub(crate) async fn error_from_response(response: reqwest::Response) -> String {
     let status = response.status();
+    // LOW (v0.3.1): el body es texto controlado por el PROVEEDOR — se trunca
+    // antes de mostrarlo en el chat (y no puede ser un vector de spam/inyección largo)
     let body = response.text().await.unwrap_or_default();
+    let body = if body.chars().count() > 500 {
+        let cut: String = body.chars().take(500).collect();
+        format!("{cut}… (truncado)")
+    } else {
+        body
+    };
     format!("El proveedor respondió HTTP {status}: {body}")
 }
 

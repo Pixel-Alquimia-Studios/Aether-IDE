@@ -1,5 +1,6 @@
 ﻿use std::collections::HashMap;
 use std::fs;
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
@@ -129,10 +130,102 @@ pub fn set_workspace(state: State<'_, WorkspaceState>, path: String) -> Result<S
     Ok(canon.to_string_lossy().to_string())
 }
 
+// --- Límites de lectura (M2, v0.3.1): sin esto, un archivo gigante
+// materializado en String + JSON IPC + String JS + modelo Monaco congelaba
+// o reventaba el WebView (OOM) ---
+/// Tamaño máximo de lectura COMPLETA (read_file / read_file_base64)
+const MAX_READ_BYTES: u64 = 20 * 1024 * 1024;
+/// Tamaño máximo del archivo para la lectura POR SECCIONES (scan de bytes)
+const MAX_RANGE_SCAN_BYTES: u64 = 512 * 1024 * 1024;
+/// Tope de contenido capturado por sección (líneas enormes incluidas)
+const MAX_RANGE_CAPTURE: usize = 2 * 1024 * 1024;
+
+fn read_guard(target: &Path, path: &str, max: u64) -> Result<u64, String> {
+    let len = fs::metadata(target)
+        .map(|m| m.len())
+        .map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
+    if len > max {
+        return Err(format!(
+            "'{path}' es demasiado grande ({} MB > límite de {} MB) para abrirlo en el editor",
+            (len + 1024 * 1024 - 1) / (1024 * 1024),
+            max / (1024 * 1024)
+        ));
+    }
+    Ok(len)
+}
+
+/// Cuenta las líneas de un archivo escaneando POR BYTES en chunks (sin
+/// materializar el contenido en memoria)
+fn count_lines(target: &Path) -> std::io::Result<usize> {
+    let mut file = fs::File::open(target)?;
+    let mut lines: usize = 0;
+    let mut buf = [0u8; 256 * 1024];
+    let mut last_byte = 0u8;
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        lines += buf[..n].iter().filter(|&&b| b == b'\n').count();
+        last_byte = buf[n - 1];
+    }
+    // Sin \n final: la última línea no cuenta salvo que el archivo tenga algo
+    if lines == 0 && last_byte != 0 {
+        return Ok(1);
+    }
+    if last_byte != b'\n' && last_byte != 0 {
+        lines += 1;
+    }
+    Ok(lines)
+}
+
+/// Captura SOLO los bytes de las líneas [start..=end] (escaneo con salida
+/// temprana al pasar del rango), con tope de memoria. Devuelve el contenido
+/// y si quedó truncado por el tope.
+fn capture_lines(target: &Path, start: usize, end: usize) -> std::io::Result<(String, bool)> {
+    let mut file = fs::File::open(target)?;
+    let mut captured: Vec<u8> = Vec::new();
+    let mut truncated = false;
+    let mut line_no: usize = 1;
+    let mut buf = [0u8; 256 * 1024];
+    'outer: loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        for &b in &buf[..n] {
+            if line_no >= start && line_no <= end {
+                if captured.len() < MAX_RANGE_CAPTURE {
+                    captured.push(b);
+                } else {
+                    truncated = true;
+                    break 'outer;
+                }
+            }
+            if b == b'\n' {
+                line_no += 1;
+                if line_no > end {
+                    break 'outer;
+                }
+            }
+        }
+    }
+    // Decodifica de una vez (rango contiguo — sin problema de bordes de chunk).
+    // lines().join normaliza CRLF→LF y quita el \n final del rango (misma
+    // semántica que el read_to_string + lines() de la ruta rápida)
+    let decoded = String::from_utf8_lossy(&captured);
+    let mut content = decoded.lines().collect::<Vec<_>>().join("\n");
+    if truncated {
+        content.push_str("\n… (sección truncada: excede el límite de 2 MB por lectura — el archivo tiene líneas enormes)");
+    }
+    Ok((content, truncated))
+}
+
 #[tauri::command]
 pub fn read_file(state: State<'_, WorkspaceState>, path: String) -> Result<String, String> {
     let root = backend_workspace(&state)?;
     let target = ensure_in_workspace(&root, Path::new(&path))?;
+    read_guard(&target, &path, MAX_READ_BYTES)?;
     fs::read_to_string(&target).map_err(|e| format!("No se pudo leer '{path}': {e}"))
 }
 
@@ -151,6 +244,7 @@ pub fn read_file_user(path: String) -> Result<String, String> {
 pub fn read_file_base64(state: State<'_, WorkspaceState>, path: String) -> Result<String, String> {
     let root = backend_workspace(&state)?;
     let target = ensure_in_workspace(&root, Path::new(&path))?;
+    read_guard(&target, &path, MAX_READ_BYTES)?;
     let bytes = fs::read(&target).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
     use base64::Engine as _;
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
@@ -165,8 +259,10 @@ pub struct ReadRange {
     pub end_line: usize,
 }
 
-/// Lectura por secciones para el anÃ¡lisis del agente: permite leer archivos
-/// grandes por rangos de lÃ­neas sin truncar a ciegas
+/// Lectura por secciones para el análisis del agente: permite leer archivos
+/// grandes por rangos de líneas sin truncar a ciegas. M2 (v0.3.1): con
+/// archivo grande hace un ESCANEO POR BYTES acotado (cuenta líneas y captura
+/// solo el rango) — ya no carga el archivo completo en memoria por llamada.
 #[tauri::command]
 pub fn read_file_range(
     state: State<'_, WorkspaceState>,
@@ -176,10 +272,40 @@ pub fn read_file_range(
 ) -> Result<ReadRange, String> {
     let root = backend_workspace(&state)?;
     let target = ensure_in_workspace(&root, Path::new(&path))?;
-    let content =
-        fs::read_to_string(&target).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
-    let lines: Vec<&str> = content.lines().collect();
-    let total_lines = lines.len();
+    let meta = fs::metadata(&target).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
+    if meta.len() > MAX_RANGE_SCAN_BYTES {
+        return Err(format!(
+            "'{path}' es demasiado grande incluso para lectura por secciones (>{} MB)",
+            MAX_RANGE_SCAN_BYTES / (1024 * 1024)
+        ));
+    }
+
+    // Ruta rápida: archivos pequeños → lectura completa (comportamiento de siempre)
+    if meta.len() <= MAX_READ_BYTES {
+        let content =
+            fs::read_to_string(&target).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
+        let lines: Vec<&str> = content.lines().collect();
+        let total_lines = lines.len();
+        if total_lines == 0 {
+            return Ok(ReadRange {
+                content: String::new(),
+                total_lines: 0,
+                start_line: 0,
+                end_line: 0,
+            });
+        }
+        let start = start_line.max(1).min(total_lines);
+        let end = end_line.max(start).min(total_lines);
+        return Ok(ReadRange {
+            content: lines[start - 1..end].join("\n"),
+            total_lines,
+            start_line: start,
+            end_line: end,
+        });
+    }
+
+    // Archivo grande: scan por bytes (dos pasadas baratas sin alloc grande)
+    let total_lines = count_lines(&target).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
     if total_lines == 0 {
         return Ok(ReadRange {
             content: String::new(),
@@ -190,9 +316,11 @@ pub fn read_file_range(
     }
     let start = start_line.max(1).min(total_lines);
     let end = end_line.max(start).min(total_lines);
+    let (content, _truncated) =
+        capture_lines(&target, start, end).map_err(|e| format!("No se pudo leer '{path}': {e}"))?;
     Ok(ReadRange {
-        content: lines[start - 1..end].join("\n"),
-        total_lines: total_lines,
+        content,
+        total_lines,
         start_line: start,
         end_line: end,
     })
@@ -429,9 +557,17 @@ pub fn load_session(app: AppHandle) -> Result<Option<SessionData>, String> {
         return Ok(None);
     }
     let raw = fs::read_to_string(&file).map_err(|e| format!("No se pudo leer la sesiÃ³n: {e}"))?;
-    serde_json::from_str(&raw)
-        .map(Some)
-        .map_err(|e| format!("SesiÃ³n corrupta: {e}"))
+    match serde_json::from_str(&raw) {
+        Ok(session) => Ok(Some(session)),
+        Err(_e) => {
+            // M11 (v0.3.1): cuarentena — el archivo corrupto se aparta para
+            // que el SIGUIENTE arranque no vuelva a fallar eternamente; la
+            // app arranca con defaults
+            let quarantined = dir.join("session.json.corrupt");
+            let _ = fs::rename(&file, &quarantined);
+            Ok(None)
+        }
+    }
 }
 
 #[tauri::command]
@@ -1115,6 +1251,54 @@ mod tests {
             .unwrap();
         assert_eq!(result.exit_code, 0);
         assert!(result.stdout.contains("ok"), "stdout: {}", result.stdout);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn count_lines_con_y_sin_newline_final() {
+        let root = tmp_dir("count");
+        let file = root.join("c.txt");
+        fs::write(&file, "a\nb\nc\n").unwrap();
+        assert_eq!(count_lines(&file).unwrap(), 3);
+        fs::write(&file, "a\nb\nc").unwrap();
+        assert_eq!(count_lines(&file).unwrap(), 3);
+        fs::write(&file, "").unwrap();
+        assert_eq!(count_lines(&file).unwrap(), 0);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn capture_lines_rango_medio() {
+        let root = tmp_dir("capture");
+        let file = root.join("cap.txt");
+        fs::write(&file, "uno\ndos\ntres\ncuatro\n").unwrap();
+        let (content, truncated) = capture_lines(&file, 2, 3).unwrap();
+        assert!(!truncated);
+        assert_eq!(content, "dos\ntres");
+        cleanup(&root);
+    }
+
+    #[test]
+    fn capture_lines_crlf_se_normaliza() {
+        let root = tmp_dir("crlf");
+        let file = root.join("crlf.txt");
+        fs::write(&file, "uno\r\ndos\r\n").unwrap();
+        let (content, _) = capture_lines(&file, 1, 2).unwrap();
+        assert_eq!(content, "uno\ndos");
+        cleanup(&root);
+    }
+
+    #[test]
+    fn read_guard_rechaza_archivo_grande() {
+        let root = tmp_dir("guard");
+        let file = root.join("big.txt");
+        // 21 MB > MAX_READ_BYTES (20 MB)
+        let big = vec![b'x'; 21 * 1024 * 1024];
+        fs::write(&file, &big).unwrap();
+        assert!(read_guard(&file, "big.txt", MAX_READ_BYTES).is_err());
+        // Uno pequeño pasa
+        fs::write(root.join("small.txt"), "x").unwrap();
+        assert!(read_guard(&root.join("small.txt"), "small.txt", MAX_READ_BYTES).is_ok());
         cleanup(&root);
     }
 }
