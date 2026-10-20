@@ -5,10 +5,39 @@ import type { FileNode } from '@/types/workspace'
 
 // Capa IPC del sistema de archivos (Fase 2.1).
 // En desktop usa invoke() contra Rust; en navegador dev cae al workspace mock.
+//
+// Contención (v0.3.1, S1/S2): los comandos sin sufijo `_user` están CONTENIDOS
+// por el backend contra el workspace que él mismo conoce (set_workspace). Los
+// comandos `_user` son SOLO para flujos explícitos del usuario (Archivo →
+// Abrir archivo / Save As pueden apuntar fuera del workspace).
+
+/** Fija el workspace en el ESTADO DEL BACKEND (fuente de verdad de la contención) */
+export async function setWorkspace(path: string): Promise<void> {
+  if (isTauri()) {
+    await invoke('set_workspace', { path })
+  }
+}
+
+/** ¿Está `path` dentro de `root`? (rutas normalizadas, sin case en Windows) */
+export function isInsideRoot(path: string, root: string): boolean {
+  const norm = (p: string) => p.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase()
+  const nPath = norm(path)
+  const nRoot = norm(root)
+  return nPath === nRoot || nPath.startsWith(`${nRoot}/`)
+}
 
 export async function readFile(path: string): Promise<string> {
   if (isTauri()) {
     return invoke<string>('read_file', { path })
+  }
+  const { MOCK_FILE_CONTENTS } = await import('./mockWorkspace')
+  return MOCK_FILE_CONTENTS[path] ?? `// ${path}\n`
+}
+
+/** Lectura sin contención: SOLO archivos elegidos explícitamente por el usuario */
+export async function readFileUser(path: string): Promise<string> {
+  if (isTauri()) {
+    return invoke<string>('read_file_user', { path })
   }
   const { MOCK_FILE_CONTENTS } = await import('./mockWorkspace')
   return MOCK_FILE_CONTENTS[path] ?? `// ${path}\n`
@@ -25,6 +54,15 @@ export async function readFileBase64(path: string): Promise<string> {
 export async function writeFile(path: string, content: string): Promise<void> {
   if (isTauri()) {
     await invoke('write_file', { path, content })
+    return
+  }
+  // Mock: no hay persistencia real en modo navegador
+}
+
+/** Escritura sin contención: SOLO guardados explícitos del usuario */
+export async function writeFileUser(path: string, content: string): Promise<void> {
+  if (isTauri()) {
+    await invoke('write_file_user', { path, content })
     return
   }
   // Mock: no hay persistencia real en modo navegador

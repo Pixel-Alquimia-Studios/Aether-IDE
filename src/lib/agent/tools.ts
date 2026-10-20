@@ -85,28 +85,11 @@ function truncateOutput(s: string): string {
 const FULL_READ_LIMIT = 16000
 const SECTION_LINES = 120
 
-// El resolver de confirmación vive fuera del store: el loop del agente queda
-// en await hasta que el usuario aprueba/deniega desde el diálogo de la UI.
-let pendingResolver: ((approved: boolean) => void) | null = null
-
-export function requestApproval(label: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    pendingResolver = resolve
-    useAgentStore.getState().setPendingCommand(label)
-  })
-}
-
-export function resolveApproval(approved: boolean): void {
-  const resolver = pendingResolver
-  pendingResolver = null
-  useAgentStore.getState().setPendingCommand(null)
-  resolver?.(approved)
-}
-
 export async function runTool(
   call: ToolCall,
   workspaceRoot: string,
   turnId: string,
+  readOnly = false,
 ): Promise<string> {
   const args = (call.arguments ?? {}) as Record<string, unknown>
 
@@ -122,6 +105,11 @@ export async function runTool(
   // tools), pero se blinda por si cambia la arquitectura.
   if (!READ_ONLY_TOOL_NAMES.has(call.name) && !MUTATING_TOOL_NAMES.has(call.name)) {
     return `Herramienta desconocida: ${call.name}`
+  }
+  // Hard-deny (M3): los subagentes de análisis son de SOLO LECTURA aunque el
+  // modelo llegue a "alucinar" una herramienta mutadora que no le ofrecimos
+  if (MUTATING_TOOL_NAMES.has(call.name) && readOnly) {
+    return 'DENEGADO: este subagente es de SOLO LECTURA — no puede modificar archivos ni ejecutar comandos.'
   }
   if (MUTATING_TOOL_NAMES.has(call.name)) {
     const agent = useAgentStore.getState()
@@ -201,7 +189,14 @@ export async function runTool(
         if (typeof content !== 'string') {
           return 'ERROR: los argumentos de write_file están incompletos (falta "content" — posible truncado por límite de tokens). El archivo NO fue modificado. Reintenta con un contenido más pequeño o divide la escritura.'
         }
-        const approved = await requestApproval(`Escribir archivo: ${path}`)
+        // Confirmación (C1): el usuario ve la ruta y el CONTENIDO COMPLETO
+        // antes de aprobar. El resolver vive en agentStore para que Stop
+        // pueda auto-denegar una aprobación pendiente.
+        const approved = await useAgentStore.getState().requestApproval({
+          kind: 'write_file',
+          path,
+          content,
+        })
         if (!approved) return 'DENEGADO: el usuario no aprobó escribir este archivo.'
         // Checkpoint Time Travel: snapshot del contenido previo antes de
         // escribir. Un fallo de lectura NO significa que el archivo no exista
@@ -229,7 +224,10 @@ export async function runTool(
         if (typeof command !== 'string' || command.trim() === '') {
           return 'ERROR: falta "command" en los argumentos de execute_command (posible truncado por límite de tokens).'
         }
-        const approved = await requestApproval(`Ejecutar comando: ${command}`)
+        const approved = await useAgentStore.getState().requestApproval({
+          kind: 'execute_command',
+          command,
+        })
         if (!approved) return 'DENEGADO: el usuario no aprobó ejecutar este comando.'
         const output = await invoke<{ exitCode: number; stdout: string; stderr: string }>(
           'execute_command',

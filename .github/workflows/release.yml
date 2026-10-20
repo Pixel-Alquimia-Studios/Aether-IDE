@@ -13,20 +13,26 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Actions fijadas por SHA (S3): un tag repunteado no puede ejecutar
+      # código arbitrario con el token de release y la llave de firma
       - name: Checkout
-        uses: actions/checkout@v4
+        # actions/checkout v4.2.2
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        # actions/setup-node v4.1.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # dtolnay/rust-toolchain (rama stable, SHA al día del pin)
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        # Swatinem/rust-cache v2.8.0
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: './src-tauri -> target'
 
@@ -35,7 +41,8 @@ jobs:
 
       # Build + firma del updater + latest.json + GitHub Release (todo en uno)
       - name: Build and publish release
-        uses: tauri-apps/tauri-action@v0
+        # tauri-apps/tauri-action v0.5.19
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -57,6 +64,7 @@ jobs:
           Copy-Item src-tauri/target/release/aether-ide.exe "aether-ide-$v-x64-portable.exe"
 
       - name: Attach portable to release
-        uses: softprops/action-gh-release@v2
+        # softprops/action-gh-release v2.3.2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           files: aether-ide-*-x64-portable.exe

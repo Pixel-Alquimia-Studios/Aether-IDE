@@ -9,12 +9,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Workspace conocido por el backend: los comandos del agente se
+        // contienen contra esta ruta (ignoran la que envíe el frontend)
+        .manage(commands::WorkspaceState(std::sync::Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
+            commands::set_workspace,
             commands::read_file,
+            commands::read_file_user,
             commands::read_file_base64,
             commands::read_file_range,
             commands::file_exists,
             commands::write_file,
+            commands::write_file_user,
             commands::read_dir,
             commands::pick_workspace_dir,
             commands::watch_workspace,

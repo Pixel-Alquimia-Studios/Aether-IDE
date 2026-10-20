@@ -1,7 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core'
 import { useEffect } from 'react'
 
-import { loadSession, readDir, saveSession, watchWorkspace } from '@/lib/workspace/fs'
+import { loadSession, readDir, saveSession, setWorkspace, watchWorkspace } from '@/lib/workspace/fs'
 import { loadChat } from '@/lib/ai/chats'
 import { useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
@@ -107,6 +107,8 @@ export function useSession(): void {
 
       if (!session.rootPath) return
       try {
+        // Fija el workspace en el BACKEND antes de cualquier comando FS
+        await setWorkspace(session.rootPath)
         const fileTree = await readDir(session.rootPath)
         if (cancelled) return
         const rootName = session.rootPath.split(/[\\/]/).filter(Boolean).pop() ?? session.rootPath

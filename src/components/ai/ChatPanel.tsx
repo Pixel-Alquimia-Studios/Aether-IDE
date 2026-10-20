@@ -108,6 +108,9 @@ export function ChatPanel() {
   const agentRunning = useAgentStore((s) => s.running)
   const agentError = useAgentStore((s) => s.error)
   const steps = useAgentStore((s) => s.steps)
+  // C1: confirmación de acciones destructivas del agente
+  const pendingApproval = useAgentStore((s) => s.pendingApproval)
+  const resolveApproval = useAgentStore((s) => s.resolveApproval)
 
   const [input, setInput] = useState('')
   const [renaming, setRenaming] = useState(false)
@@ -676,6 +679,45 @@ export function ChatPanel() {
 
       {/* Chips de contexto + menciones (los comandos viven en el menú "/") */}
       <div className="relative border-t border-aether-border p-2">
+        {/* C1: confirmación de acciones destructivas — detalle completo ANTES de aprobar */}
+        {pendingApproval && (
+          <div className="mb-1.5 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-2.5 backdrop-blur-xl">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+              ⚠ {t('chat.confirmRequired')} —{' '}
+              {pendingApproval.kind === 'write_file'
+                ? t('chat.approvalWrite')
+                : t('chat.approvalCommand')}
+            </p>
+            {pendingApproval.kind === 'write_file' ? (
+              <>
+                <p className="mt-1 break-all font-mono text-[11px] text-aether-text">
+                  {pendingApproval.path}
+                </p>
+                <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-aether-bg px-2 py-1.5 font-mono text-[11px] leading-relaxed text-aether-text-dim">
+                  {pendingApproval.content}
+                </pre>
+              </>
+            ) : (
+              <pre className="mt-1 overflow-auto whitespace-pre-wrap rounded bg-aether-bg px-2 py-1.5 font-mono text-[12px] text-aether-text">
+                {pendingApproval.command}
+              </pre>
+            )}
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => resolveApproval(true)}
+                className="rounded bg-gradient-to-br from-emerald-600 to-emerald-500 px-3 py-1 text-[12px] font-medium text-white transition-shadow hover:shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+              >
+                ✓ {t('chat.approve')}
+              </button>
+              <button
+                onClick={() => resolveApproval(false)}
+                className="rounded border border-red-500/40 px-3 py-1 text-[12px] font-medium text-red-400 transition-colors hover:bg-red-500/10"
+              >
+                ✕ {t('chat.deny')}
+              </button>
+            </div>
+          </div>
+        )}
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           {autoContextEnabled && activeCtxName && (
             <span

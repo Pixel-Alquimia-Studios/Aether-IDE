@@ -34,13 +34,28 @@ function makeId(): string {
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+// --- Confirmación de acciones destructivas (C1, v0.3.1) ---
+
+/** Detalle completo de la acción pendiente (lo que el usuario debe ver ANTES de aprobar) */
+export interface PendingApproval {
+  kind: 'write_file' | 'execute_command'
+  path?: string
+  content?: string
+  command?: string
+}
+
+// El resolver vive en el módulo del store (no en el componente): así Stop
+// puede auto-denegar una aprobación pendiente y el bucle nunca queda colgado
+// esperando una UI que no existe.
+let approvalResolver: ((approved: boolean) => void) | null = null
+
 interface AgentState {
   /** Modo del panel: plan (texto normal) o agent (ejecuta tareas) */
   mode: 'plan' | 'agent'
   steps: AgentStep[]
   running: boolean
-  /** Comando/escritura pendiente de confirmación del usuario */
-  pendingCommand: string | null
+  /** Acción destructiva pendiente de confirmación (diálogo en ChatPanel) */
+  pendingApproval: PendingApproval | null
   error: string | null
   /** Snapshots de archivos previos a las ediciones del agente (Time Travel) */
   checkpoints: AgentCheckpoint[]
@@ -48,7 +63,9 @@ interface AgentState {
   stopRequested: boolean
 
   setMode: (mode: 'plan' | 'agent') => void
-  setPendingCommand: (label: string | null) => void
+  /** Bloquea el bucle hasta que el usuario apruebe/deniegue (C1) */
+  requestApproval: (details: PendingApproval) => Promise<boolean>
+  resolveApproval: (approved: boolean) => void
   /** Reemplaza los pasos mostrados (al reanudar un chat desde el historial) */
   setSteps: (steps: AgentStep[]) => void
   addCheckpoint: (checkpoint: AgentCheckpoint) => void
@@ -68,13 +85,23 @@ export const useAgentStore = create<AgentState>()((set) => ({
   mode: 'plan',
   steps: [],
   running: false,
-  pendingCommand: null,
+  pendingApproval: null,
   error: null,
   checkpoints: [],
   stopRequested: false,
 
   setMode: (mode) => set({ mode }),
-  setPendingCommand: (label) => set({ pendingCommand: label }),
+  requestApproval: (details) =>
+    new Promise((resolve) => {
+      approvalResolver = resolve
+      set({ pendingApproval: details })
+    }),
+  resolveApproval: (approved) => {
+    const resolver = approvalResolver
+    approvalResolver = null
+    set({ pendingApproval: null })
+    resolver?.(approved)
+  },
   setSteps: (steps) => set({ steps }),
   addCheckpoint: (checkpoint) =>
     set((state) => ({ checkpoints: [...state.checkpoints, checkpoint] })),
@@ -85,8 +112,18 @@ export const useAgentStore = create<AgentState>()((set) => ({
       steps: state.steps.filter((s) => !(s.turnId && turnIds.has(s.turnId))),
     })),
   reset: () => set({ steps: [], error: null }),
-  // Fase E: el bucle del agente se detiene en el siguiente paso
-  stopAgent: () => set({ stopRequested: true }),
+  // Fase E: el bucle se detiene en el siguiente paso. Si había una
+  // confirmación pendiente, se auto-deniega (el bucle nunca queda colgado)
+  stopAgent: () => {
+    const resolver = approvalResolver
+    approvalResolver = null
+    if (resolver) {
+      set({ pendingApproval: null, stopRequested: true })
+      resolver(false)
+    } else {
+      set({ stopRequested: true })
+    }
+  },
 
   // Bucle de razonamiento (tool loop): el frontend orquesta los pasos.
   // Con subagent (/qa, /security, /audit): tools de SOLO LECTURA y system
@@ -250,7 +287,8 @@ export const useAgentStore = create<AgentState>()((set) => ({
               },
             ],
           }))
-          const output = await runTool(call, workspaceRoot, turn)
+          // M3: los subagentes de análisis son de solo lectura — hard-deny
+          const output = await runTool(call, workspaceRoot, turn, !!subagent)
           // Persist inmediato: los writes aprobados sobreviven a un reload
           void useChatStore.getState().persistActive()
           set((state) => {

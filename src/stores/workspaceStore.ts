@@ -1,7 +1,13 @@
 import { isTauri } from '@tauri-apps/api/core'
 import { create } from 'zustand'
 
-import { pickWorkspaceDir, readDir, readFile as fsReadFile, watchWorkspace } from '@/lib/workspace/fs'
+import {
+  pickWorkspaceDir,
+  readDir,
+  readFile as fsReadFile,
+  setWorkspace,
+  watchWorkspace,
+} from '@/lib/workspace/fs'
 import { MOCK_FILE_TREE } from '@/lib/workspace/mockWorkspace'
 import type { FileNode } from '@/types/workspace'
 
@@ -39,6 +45,9 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
         set({ loading: false })
         return
       }
+      // Fija el workspace en el BACKEND antes de cualquier comando FS:
+      // de aquí depende la contención de los comandos del agente
+      await setWorkspace(rootPath)
       const fileTree = await readDir(rootPath)
       const rootName = rootPath.split(/[\\/]/).filter(Boolean).pop() ?? rootPath
       set({ rootPath, rootName, fileTree, loading: false, expandedDirs: new Set() })

@@ -2,8 +2,11 @@ import { create } from 'zustand'
 
 import { getLanguageFromPath } from '@/lib/workspace/language'
 import {
+  isInsideRoot,
   pickSaveFile,
   readFileBase64,
+  readFileUser,
+  writeFileUser,
   writeFile as fsWriteFile,
 } from '@/lib/workspace/fs'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
@@ -38,6 +41,12 @@ function cancelAutoSaveTimer(id: string): void {
     window.clearTimeout(timer)
     autoSaveTimers.delete(id)
   }
+}
+
+/** ¿La ruta requiere los comandos de usuario (fuera del workspace)? */
+function isUserPath(path: string): boolean {
+  const root = useWorkspaceStore.getState().rootPath
+  return root !== null && !isInsideRoot(path, root)
 }
 
 interface EditorState {
@@ -89,7 +98,9 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         set({ tabs: [...get().tabs, tab], activeTabId: tab.id, error: null })
         return
       }
-      const content = await useWorkspaceStore.getState().readFile(path)
+      const content = isUserPath(path)
+        ? await readFileUser(path)
+        : await useWorkspaceStore.getState().readFile(path)
       const tab: EditorTab = {
         id: path,
         title: name,
@@ -167,7 +178,12 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
     if (!tab) return
     cancelAutoSaveTimer(id)
     try {
-      await fsWriteFile(newPath, tab.content)
+      // Save As puede apuntar fuera del workspace: comando de usuario
+      if (isUserPath(newPath)) {
+        await writeFileUser(newPath, tab.content)
+      } else {
+        await fsWriteFile(newPath, tab.content)
+      }
       set((state) => ({
         tabs: state.tabs.map((t) =>
           t.id === id
@@ -199,7 +215,11 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       return
     }
     try {
-      await fsWriteFile(tab.id, tab.content)
+      if (isUserPath(tab.id)) {
+        await writeFileUser(tab.id, tab.content)
+      } else {
+        await fsWriteFile(tab.id, tab.content)
+      }
       cancelAutoSaveTimer(id)
       set((state) => ({
         tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: false } : t)),
@@ -226,7 +246,9 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
         }))
         return
       }
-      const content = await useWorkspaceStore.getState().readFile(path)
+      const content = isUserPath(path)
+        ? await readFileUser(path)
+        : await useWorkspaceStore.getState().readFile(path)
       set((state) => ({
         tabs: state.tabs.map((t) =>
           t.id === path && t.content !== content ? { ...t, content, isDirty: false } : t,
