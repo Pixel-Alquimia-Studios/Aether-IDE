@@ -48,14 +48,25 @@ export async function rollbackTurns(turnIds: Set<string>): Promise<void> {
   const { checkpoints } = useAgentStore.getState()
   const toRevert = checkpoints.filter((cp) => turnIds.has(cp.turnId))
 
+  // M5 (v0.3.1): cancelar los timers de Auto Save de los archivos afectados
+  // ANTES de revertir. Un timer de 1 s programado justo antes del rollback
+  // podía dispararse entre la restauración y su cancelación posterior y
+  // reescribir el contenido viejo sobre el archivo recién restaurado,
+  // deshaciendo el rollback en silencio.
+  const editor = useEditorStore.getState()
+  const affectedPaths = new Set(toRevert.map((cp) => cp.path))
+  for (const path of affectedPaths) {
+    editor.cancelAutoSave(path)
+  }
+
   // Orden inverso: cada restauración deshace la edición más reciente primero
   for (const checkpoint of [...toRevert].reverse()) {
     try {
       if (checkpoint.previousContent !== null) {
         await fsWriteFile(checkpoint.path, checkpoint.previousContent)
       } else {
-        // El archivo fue creado por el agente: se elimina (siempre dentro del
-        // workspace activo; el backend lo valida y rechaza una raíz vacía)
+        // El archivo fue creado por el agente: se elimina (el backend valida
+        // la contención contra el workspace del estado de Rust)
         await deleteFile(checkpoint.path, useWorkspaceStore.getState().rootPath ?? '')
       }
     } catch {
@@ -67,12 +78,9 @@ export async function rollbackTurns(turnIds: Set<string>): Promise<void> {
   useChatStore.getState().applyRollback(turnIds)
 
   // Refrescar las pestañas abiertas de los archivos revertidos: sin esto, la
-  // pestaña seguía mostrando el contenido post-agente y Auto Save podía
-  // reescribirlo sobre el archivo recién restaurado, deshaciendo el rollback
-  // en silencio. Force = el contenido en disco manda (acción explícita).
-  const editor = useEditorStore.getState()
-  for (const path of new Set(toRevert.map((cp) => cp.path))) {
-    editor.cancelAutoSave(path)
+  // pestaña seguía mostrando el contenido post-agente. Force = el contenido
+  // en disco manda (acción explícita).
+  for (const path of affectedPaths) {
     await editor.reloadExternally(path, true)
   }
 

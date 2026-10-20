@@ -361,7 +361,8 @@ export function ChatPanel() {
           onChange={(e) => {
             if (e.target.value) void resumeChat(e.target.value)
           }}
-          className="min-w-0 flex-1 cursor-pointer rounded-md border border-transparent bg-transparent px-2 py-1 text-[12px] text-aether-text outline-none transition-colors hover:border-aether-border hover:bg-aether-bg focus:border-aether-accent"
+          disabled={streaming || agentRunning}
+          className="min-w-0 flex-1 cursor-pointer rounded-md border border-transparent bg-transparent px-2 py-1 text-[12px] text-aether-text outline-none transition-colors hover:border-aether-border hover:bg-aether-bg focus:border-aether-accent disabled:cursor-not-allowed disabled:opacity-40"
         >
           <option value="">— Chat nuevo —</option>
           {history.map((c) => (
@@ -460,11 +461,14 @@ export function ChatPanel() {
           </select>
         </div>
         <div className="mt-1.5 flex items-center gap-2">
-          {/* Selector de modo: botón único desplegable (Plan / Agente) */}
+          {/* Selector de modo: botón único desplegable (Plan / Agente) —
+              deshabilitado con trabajo en vuelo (M7: evita cruzar un stream
+              de Plan con el bucle del agente) */}
           <div className="relative shrink-0">
             <button
               onClick={() => setModeMenuOpen(!modeMenuOpen)}
-              className="flex items-center gap-1 rounded border border-aether-border bg-aether-bg px-2 py-1 text-[11px] font-medium text-aether-text"
+              disabled={streaming || agentRunning}
+              className="flex items-center gap-1 rounded border border-aether-border bg-aether-bg px-2 py-1 text-[11px] font-medium text-aether-text disabled:cursor-not-allowed disabled:opacity-40"
             >
               {agentMode === 'agent' ? '🤖 Agente' : '📝 Plan'}
               <span className="text-[8px]">▾</span>

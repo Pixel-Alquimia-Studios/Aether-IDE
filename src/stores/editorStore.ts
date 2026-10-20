@@ -214,17 +214,23 @@ export const useEditorStore = create<EditorState>()((set, get) => ({
       if (newPath) await get().saveTabAs(id, newPath)
       return
     }
+    // M12 (v0.3.1): captura el contenido al iniciar; tras escribir NO cancela
+    // un timer programado durante la escritura (esos keystrokes se perderían)
+    // y solo limpia isDirty si el contenido no volvió a cambiar
+    const contentAtSave = tab.content
     try {
       if (isUserPath(tab.id)) {
         await writeFileUser(tab.id, tab.content)
       } else {
         await fsWriteFile(tab.id, tab.content)
       }
-      cancelAutoSaveTimer(id)
-      set((state) => ({
-        tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: false } : t)),
-        error: null,
-      }))
+      const current = get().tabs.find((t) => t.id === id)
+      if (current && current.content === contentAtSave) {
+        set((state) => ({
+          tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: false } : t)),
+          error: null,
+        }))
+      }
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) })
     }

@@ -14,6 +14,9 @@ pub struct StoredMessage {
     /// los chats guardados antes de persistirlo se cargan igual (serde default)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn_id: Option<String>,
+    /// Timestamp de creación (M4: orden del timeline unificado tras reanudar)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ts: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

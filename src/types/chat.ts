@@ -16,6 +16,8 @@ export interface StoredChatMessage {
   content: string
   /** Identificador de turno (para Agent Time Travel / rollback); persistido */
   turnId?: string
+  /** Timestamp de creación (M4: orden del timeline unificado tras reanudar) */
+  ts?: number
 }
 
 export interface ChatSummary {

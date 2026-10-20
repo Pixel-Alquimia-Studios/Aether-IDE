@@ -18,6 +18,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
 import { useEditorStore } from '@/stores/editorStore'
+import { useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useGitStore } from '@/stores/gitStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -51,6 +52,12 @@ export default function App() {
     void gitRefresh()
     const chat = useChatStore.getState()
     if (chat.chatWorkspaceRoot && rootPath && chat.chatWorkspaceRoot !== rootPath) {
+      // B2 (v0.3.1): corta TODO el trabajo en vuelo ligado al workspace
+      // anterior — el stream "resucitado" y el agente ya no pueden seguir
+      // escribiendo en la carpeta vieja. stopAgent también auto-deniega
+      // cualquier confirmación pendiente (C1).
+      chat.cancelStream()
+      useAgentStore.getState().stopAgent()
       void chat
         .persistActive()
         .then(() => {

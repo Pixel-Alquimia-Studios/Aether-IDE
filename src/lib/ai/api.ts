@@ -158,6 +158,11 @@ export async function inlineCompletion(params: {
   }
 }
 
+/** Aborta un task en curso en Rust (streams del chat y pasos del agente) */
+export async function chatStop(taskId: string): Promise<void> {
+  await invoke('chat_stop', { taskId })
+}
+
 // Modo agente: una llamada al LLM con tools (sin streaming).
 // El bucle agéntico lo orquesta el agentStore en el frontend.
 export async function chatWithTools(params: {
@@ -166,6 +171,8 @@ export async function chatWithTools(params: {
   messages: Array<{ role: string; content: string }>
   tools: ToolDef[]
   thinkingLevel?: ThinkingLevel
+  /** Identifica el paso para poder DETENERLO con chat_stop (M9, v0.3.1) */
+  taskId?: string
 }): Promise<ToolResponse> {
   if (!isTauri()) {
     throw new Error('El modo agente requiere la app de escritorio (Tauri)')
@@ -175,7 +182,7 @@ export async function chatWithTools(params: {
     model: params.model,
     messages: params.messages,
     tools: params.tools,
-    taskId: `agent-step-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    taskId: params.taskId ?? `agent-step-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     thinkingLevel: params.thinkingLevel ?? null,
   })
 }

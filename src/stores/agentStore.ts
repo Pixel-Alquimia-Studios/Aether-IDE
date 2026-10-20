@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { chatWithTools } from '@/lib/ai/api'
+import { chatStop, chatWithTools } from '@/lib/ai/api'
 import { buildContextBlock, getActiveEditorContext, resolveMentions } from '@/lib/ai/context'
 import { AGENT_TOOLS, runTool } from '@/lib/agent/tools'
 import { SUBAGENT_TOOL_NAMES, parseFindings, type SubagentDef } from '@/lib/agent/subagents'
@@ -48,6 +48,10 @@ export interface PendingApproval {
 // puede auto-denegar una aprobación pendiente y el bucle nunca queda colgado
 // esperando una UI que no existe.
 let approvalResolver: ((approved: boolean) => void) | null = null
+
+// M9 (v0.3.1): taskId del paso LLM en vuelo — Stop puede abortarlo en Rust
+// (chat_stop) en vez de esperar a que el modelo termine el paso completo
+let activeStepTaskId: string | null = null
 
 interface AgentState {
   /** Modo del panel: plan (texto normal) o agent (ejecuta tareas) */
@@ -115,6 +119,11 @@ export const useAgentStore = create<AgentState>()((set) => ({
   // Fase E: el bucle se detiene en el siguiente paso. Si había una
   // confirmación pendiente, se auto-deniega (el bucle nunca queda colgado)
   stopAgent: () => {
+    // M9: aborta también el paso LLM en vuelo (chat_stop en Rust)
+    const stepTaskId = activeStepTaskId
+    if (stepTaskId) {
+      void chatStop(stepTaskId).catch(() => undefined)
+    }
     const resolver = approvalResolver
     approvalResolver = null
     if (resolver) {
@@ -197,13 +206,35 @@ export const useAgentStore = create<AgentState>()((set) => ({
           void useChatStore.getState().persistActive()
           return
         }
+        // B2 (v0.3.1): si el workspace cambió a mitad del run, aborta — los
+        // archivos del workspace anterior ya no deben tocarse
+        if (useWorkspaceStore.getState().rootPath !== workspaceRoot) {
+          set((state) => ({
+            steps: [
+              ...state.steps,
+              {
+                type: 'text',
+                role: 'assistant',
+                content: '⏹ Abortado: se cambió de workspace durante la tarea.',
+                turnId: turn,
+                ts: Date.now(),
+                botName: subagent?.botName,
+              },
+            ],
+          }))
+          void useChatStore.getState().persistActive()
+          return
+        }
+        activeStepTaskId = `agent-step-${Date.now()}-${Math.random().toString(16).slice(2)}`
         const response = await chatWithTools({
           providerId: config.providerId,
           model: config.model,
           messages: history,
           tools,
           thinkingLevel: useChatStore.getState().thinkingLevel,
+          taskId: activeStepTaskId,
         })
+        activeStepTaskId = null
 
         if (response.type === 'text') {
           // Anti-ecolalia: el modelo copió la anotación interna del historial
@@ -330,6 +361,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
         set({ error: message })
       }
     } finally {
+      activeStepTaskId = null
       set({ running: false, stopRequested: false })
     }
   },

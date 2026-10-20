@@ -99,6 +99,7 @@ export function useSession(): void {
                 role: m.role as 'user' | 'assistant',
                 content: m.content,
                 ...(m.turnId ? { turnId: m.turnId } : {}),
+                ...(m.ts ? { ts: m.ts } : {}),
               })),
           })
           useAgentStore.getState().setSteps(activeChat.agentSteps ?? [])
