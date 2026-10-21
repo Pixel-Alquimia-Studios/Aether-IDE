@@ -246,8 +246,69 @@ pub trait Provider: Send + Sync {
 pub(crate) fn http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(15))
+        // Tope de seguridad TOTAL de 10 min (fix/gateway-retry, punto 5): una
+        // respuesta ACTIVA no se corta por aquí en la práctica (el corte que
+        // importa es el de INACTIVIDAD, 120 s sin bytes, en los adaptadores);
+        // esto evita colgas eternos si el proveedor nunca cierra el stream
+        .timeout(std::time::Duration::from_secs(600))
         .build()
         .expect("No se pudo construir el cliente HTTP")
+}
+
+// --- Reintentos del gateway (fix/gateway-retry) ---
+
+/// Prefijo de los errores TRANSITORIOS de la fase de stream. Contrato: el
+/// adaptador SOLO lo usa cuando AÚN no llegó contenido al frontend —
+/// reintentar después de contenido duplicaría texto (req. 2)
+pub(crate) const TRANSIENT_PREFIX: &str = "[transitorio] ";
+
+/// Segundos de INACTIVIDAD del stream (sin recibir ni un byte) antes de
+/// considerarlo muerto (req. 5). Un stream que sigue emitiendo no se corta.
+pub(crate) const STREAM_IDLE_SECS: u64 = 120;
+
+/// Reintentos de la FASE DE PETICIÓN (send_with_retries)
+const MAX_SEND_RETRIES: u32 = 3;
+/// Reintentos de la FASE DE STREAM (inactividad/corte antes del primer byte)
+pub(crate) const MAX_STREAM_RETRIES: u32 = 2;
+
+/// ¿El código HTTP es transitorio (reintentable)? (req. 1)
+pub(crate) fn retryable_status(status: u16) -> bool {
+    matches!(status, 408 | 429 | 500 | 502 | 503 | 504 | 529)
+}
+
+/// Backoff por intento de reintento: 0→2 s, 1→5 s, ≥2→10 s (req. 1)
+pub(crate) fn backoff_delay(attempt: u32) -> Duration {
+    const SECS: [u64; 3] = [2, 5, 10];
+    Duration::from_secs(SECS[(attempt as usize).min(SECS.len() - 1)])
+}
+
+/// Retry-After del proveedor, con tope de 30 s (req. 1). None si no viene,
+/// viene vacío o no es un número de segundos
+pub(crate) fn parse_retry_after(header: Option<&str>) -> Option<Duration> {
+    header
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map(|secs| Duration::from_secs(secs.min(30)))
+}
+
+/// Marca un error de la fase de stream como transitorio SOLO si no se emitió
+/// contenido (req. 2). `reason_code`: "red" | "inactividad" (el frontend lo
+/// traduce para el mensaje de estado)
+pub(crate) fn stream_error(emitted: bool, reason_code: &str, msg: &str) -> String {
+    if emitted {
+        msg.to_string()
+    } else {
+        format!("{TRANSIENT_PREFIX}{reason_code}:{msg}")
+    }
+}
+
+pub(crate) fn is_transient_error(msg: &str) -> bool {
+    msg.starts_with(TRANSIENT_PREFIX)
+}
+
+/// Extrae el código de motivo del error transitorio ("red" | "inactividad")
+pub(crate) fn transient_reason_code(msg: &str) -> &str {
+    let rest = msg.strip_prefix(TRANSIENT_PREFIX).unwrap_or(msg);
+    rest.split(':').next().unwrap_or("red")
 }
 
 pub(crate) async fn error_from_response(response: reqwest::Response) -> String {
@@ -264,45 +325,70 @@ pub(crate) async fn error_from_response(response: reqwest::Response) -> String {
     format!("El proveedor respondió HTTP {status}: {body}")
 }
 
-const MAX_RETRIES: u32 = 5;
+/// Aviso de reintento para el frontend: marcador estructurado
+/// `gateway-retry:{intento}/{máx}:{motivo}` — el chatStore lo traduce con i18n
+fn notify_retry(channel: Option<&Channel<StreamChunk>>, attempt: u32, reason: &str) {
+    if let Some(ch) = channel {
+        let _ = ch.send(StreamChunk::Status {
+            message: format!("gateway-retry:{attempt}/{MAX_SEND_RETRIES}:{reason}"),
+        });
+    }
+}
 
-/// Envía la petición con reintentos ante 429 (rate limit) y 503 (service
-/// unavailable), con backoff exponencial (1s, 2s, 4s, 8s, 16s) y máximo
-/// MAX_RETRIES reintentos. Devuelve Ok solo con respuestas exitosas; cada
-/// reintento se informa por el channel (si hay) como StreamChunk::Status.
+/// Envía la petición con reintentos ante errores TRANSITORIOS: 408, 429, 500,
+/// 502, 503, 504, 529 y errores de conexión/reset (req. 1). NO reintenta
+/// 400/401/403/404 ni otros errores de contenido. Respeta Retry-After con
+/// tope de 30 s; si no viene, backoff fijo 2 s → 5 s → 10 s. Máximo
+/// MAX_SEND_RETRIES reintentos. Cada reintento se informa por el channel (si
+/// hay) como StreamChunk::Status con marcador `gateway-retry:…`.
+///
+/// Esta fase es ANTES de cualquier byte de contenido: reintentar aquí nunca
+/// duplica texto (req. 2). La cancelación del backoff la cubre el `select!`
+/// del invocador (el futuro completo se aborta — req. 3).
 pub(crate) async fn send_with_retries(
     request: reqwest::RequestBuilder,
     channel: Option<&Channel<StreamChunk>>,
 ) -> Result<reqwest::Response, String> {
     let mut attempt: u32 = 0;
     loop {
-        let response = request
+        let response = match request
             .try_clone()
             .ok_or_else(|| "No se pudo clonar la petición para reintentar".to_string())?
             .send()
             .await
-            .map_err(|e| format!("Error de conexión: {e}"))?;
+        {
+            Ok(r) => r,
+            // Error de conexión/reset: transitorio (req. 1)
+            Err(e) => {
+                if attempt >= MAX_SEND_RETRIES {
+                    return Err(format!("Error de conexión: {e}"));
+                }
+                attempt += 1;
+                notify_retry(channel, attempt, "red");
+                tokio::time::sleep(backoff_delay(attempt - 1)).await;
+                continue;
+            }
+        };
 
         let status = response.status();
-        let retryable = status == reqwest::StatusCode::TOO_MANY_REQUESTS
-            || status == reqwest::StatusCode::SERVICE_UNAVAILABLE;
-
         if status.is_success() {
             return Ok(response);
         }
-        if !retryable || attempt >= MAX_RETRIES {
+        if !retryable_status(status.as_u16()) || attempt >= MAX_SEND_RETRIES {
             return Err(error_from_response(response).await);
         }
 
         attempt += 1;
-        if let Some(ch) = channel {
-            let _ = ch.send(StreamChunk::Status {
-                message: format!(
-                    "Rate limit alcanzado (HTTP {status}). Reintentando ({attempt}/{MAX_RETRIES})…"
-                ),
-            });
-        }
-        tokio::time::sleep(Duration::from_secs(2u64.pow(attempt - 1))).await;
+        // Retry-After del proveedor con tope de 30 s (req. 1); si no viene,
+        // backoff fijo 2 s → 5 s → 10 s
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| parse_retry_after(Some(s)));
+        let delay = retry_after.unwrap_or_else(|| backoff_delay(attempt - 1));
+        notify_retry(channel, attempt, &status.as_u16().to_string());
+        tokio::time::sleep(delay).await;
     }
 }
 
@@ -494,4 +580,78 @@ pub fn list_providers() -> Vec<ProviderInfo> {
     all.push(GeminiProvider.info());
     all.push(OllamaProvider.info());
     all
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clasificacion_codigos_reintentables() {
+        // Transitorios (req. 1): 408, 429, 500, 502, 503, 504, 529
+        for code in [408u16, 429, 500, 502, 503, 504, 529] {
+            assert!(retryable_status(code), "{code} debe ser reintentable");
+        }
+        // NO reintentables: errores de contenido/credenciales y otros
+        for code in [200u16, 400, 401, 403, 404, 418, 422, 501, 505] {
+            assert!(!retryable_status(code), "{code} NO debe ser reintentable");
+        }
+    }
+
+    #[test]
+    fn backoff_exponencial_con_tope() {
+        assert_eq!(backoff_delay(0), Duration::from_secs(2));
+        assert_eq!(backoff_delay(1), Duration::from_secs(5));
+        assert_eq!(backoff_delay(2), Duration::from_secs(10));
+        // Fuera de rango: se queda en el máximo (10 s), nunca crece más
+        assert_eq!(backoff_delay(3), Duration::from_secs(10));
+        assert_eq!(backoff_delay(99), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn retry_after_con_tope_de_30s() {
+        assert_eq!(
+            parse_retry_after(Some("5")),
+            Some(Duration::from_secs(5))
+        );
+        // Tope: un Retry-After enorme no colga la UI
+        assert_eq!(
+            parse_retry_after(Some("120")),
+            Some(Duration::from_secs(30))
+        );
+        // Formato no numérico (HTTP-date) o ausente: sin espera especial
+        assert_eq!(parse_retry_after(Some("Wed, 21 Oct 2026 07:28:00 GMT")), None);
+        assert_eq!(parse_retry_after(Some("")), None);
+        assert_eq!(parse_retry_after(None), None);
+    }
+
+    #[test]
+    fn stream_error_contrato_transitorio() {
+        // Con contenido YA emitido: error FINAL, sin marcador (req. 2 —
+        // reintentar duplicaría texto)
+        let with_content = stream_error(true, "red", "stream cortado");
+        assert!(!is_transient_error(&with_content));
+        assert_eq!(with_content, "stream cortado");
+
+        // Sin contenido emitido: transitorio → reintentable (req. 5)
+        let without = stream_error(false, "inactividad", "120 s sin datos");
+        assert!(is_transient_error(&without));
+        assert_eq!(transient_reason_code(&without), "inactividad");
+
+        let net = stream_error(false, "red", "reset por el peer");
+        assert!(is_transient_error(&net));
+        assert_eq!(transient_reason_code(&net), "red");
+
+        // Un error cualquiera sin marcador jamás es transitorio
+        assert!(!is_transient_error("El proveedor respondió HTTP 400: bad request"));
+    }
+
+    #[test]
+    fn errores_de_contenido_nunca_transitorios() {
+        // 400/401/403/404 NO se marcan como reintentables (req. 1)
+        assert!(!retryable_status(400));
+        assert!(!retryable_status(401));
+        assert!(!retryable_status(403));
+        assert!(!retryable_status(404));
+    }
 }

@@ -120,10 +120,42 @@ impl Provider for AnthropicProvider {
         let response = send_with_retries(request, Some(channel)).await?;
 
         let mut usage = StreamUsage::default();
+        let mut emitted = false; // algún Delta/Thinking ya llegó al frontend
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
-        while let Some(chunk) = stream.next().await {
-            let bytes = chunk.map_err(|e| format!("Error recibiendo el stream: {e}"))?;
+        loop {
+            // Inactividad (req. 5): 120 s sin ni un byte = stream muerto
+            let next = tokio::time::timeout(
+                std::time::Duration::from_secs(crate::ai::STREAM_IDLE_SECS),
+                stream.next(),
+            )
+            .await;
+            let item = match next {
+                Err(_) => {
+                    return Err(crate::ai::stream_error(
+                        emitted,
+                        "inactividad",
+                        &format!(
+                            "El stream se quedó sin datos ({} s de inactividad)",
+                            crate::ai::STREAM_IDLE_SECS
+                        ),
+                    ));
+                }
+                Ok(None) => break,
+                Ok(Some(item)) => item,
+            };
+            let bytes = match item {
+                Ok(b) => b,
+                // Corte a mitad del stream: error FINAL si ya hubo contenido,
+                // transitorio (reintentable) si aún no (req. 2)
+                Err(e) => {
+                    return Err(crate::ai::stream_error(
+                        emitted,
+                        "red",
+                        &format!("Error recibiendo el stream: {e}"),
+                    ));
+                }
+            };
             buffer.push_str(&String::from_utf8_lossy(&bytes));
             for data in extract_sse_data_lines(&mut buffer) {
                 let Ok(value) = serde_json::from_str::<serde_json::Value>(&data) else {
@@ -150,6 +182,7 @@ impl Provider for AnthropicProvider {
                                     channel
                                         .send(StreamChunk::Thinking { text: t.to_string() })
                                         .map_err(|e| format!("Error de IPC: {e}"))?;
+                                    emitted = true;
                                 }
                             }
                         } else if let Some(text) = value["delta"]["text"].as_str() {
@@ -158,6 +191,7 @@ impl Provider for AnthropicProvider {
                                 channel
                                     .send(StreamChunk::Delta { text: text.to_string() })
                                     .map_err(|e| format!("Error de IPC: {e}"))?;
+                                emitted = true;
                             }
                         }
                     }
@@ -169,6 +203,8 @@ impl Provider for AnthropicProvider {
                             .as_str()
                             .unwrap_or("Error del proveedor")
                             .to_string();
+                        // Error lógico del proveedor (no transitorio de red):
+                        // error final siempre (req. 2)
                         return Err(message);
                     }
                     _ => {}

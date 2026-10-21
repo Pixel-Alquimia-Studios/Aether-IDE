@@ -94,18 +94,51 @@ pub async fn chat_stream(
         None
     };
 
-    let cancel_rx = task_id.as_ref().map(|tid| register_cancel(tid));
+    let mut cancel_rx = task_id.as_ref().map(|tid| register_cancel(tid));
 
     let start = std::time::Instant::now();
-    let result = if let Some(mut rx) = cancel_rx {
-        tokio::select! {
-            result = provider.chat_stream(&model, messages, api_key, thinking_level, &on_chunk) => result,
-            _ = &mut rx => Err("Chat cancelado por el usuario".to_string()),
+    // Reintentos de la FASE DE STREAM (fix/gateway-retry, req. 5): solo
+    // errores marcados como transitorios — por contrato (stream_error en
+    // mod.rs) esos implican que AÚN no llegó contenido al frontend, así que
+    // reintentar nunca duplica texto (req. 2)
+    let mut stream_attempt: u32 = 0;
+    let result = loop {
+        let attempt_result = if let Some(rx) = cancel_rx.as_mut() {
+            tokio::select! {
+                result = provider.chat_stream(&model, messages.clone(), api_key.clone(), thinking_level, &on_chunk) => result,
+                // Cancelable en CUALQUIER momento: durante la llamada o el
+                // backoff entre reintentos (req. 3)
+                _ = rx => Err("Chat cancelado por el usuario".to_string()),
+            }
+        } else {
+            provider
+                .chat_stream(&model, messages.clone(), api_key.clone(), thinking_level, &on_chunk)
+                .await
+        };
+        match attempt_result {
+            Err(e) if crate::ai::is_transient_error(&e) && stream_attempt < crate::ai::MAX_STREAM_RETRIES => {
+                stream_attempt += 1;
+                let reason = crate::ai::transient_reason_code(&e);
+                let _ = on_chunk.send(StreamChunk::Status {
+                    message: format!(
+                        "gateway-retry:{stream_attempt}/{}:{reason}",
+                        crate::ai::MAX_STREAM_RETRIES
+                    ),
+                });
+                let delay = crate::ai::backoff_delay(stream_attempt - 1);
+                if let Some(rx) = cancel_rx.as_mut() {
+                    tokio::select! {
+                        _ = tokio::time::sleep(delay) => {}
+                        _ = rx => {
+                            break Err("Chat cancelado por el usuario".to_string());
+                        }
+                    }
+                } else {
+                    tokio::time::sleep(delay).await;
+                }
+            }
+            other => break other,
         }
-    } else {
-        provider
-            .chat_stream(&model, messages, api_key, thinking_level, &on_chunk)
-            .await
     };
     let elapsed_ms = start.elapsed().as_millis() as u64;
 

@@ -319,6 +319,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         },
         onStatus: (status) => {
           if (!owned()) return
+          // fix/gateway-retry: marcador estructurado del gateway
+          // `gateway-retry:{intento}/{máx}:{motivo}` → mensaje i18n claro
+          const m = /^gateway-retry:(\d+)\/(\d+):(.+)$/.exec(status)
+          if (m) {
+            const [, attempt, max, code] = m
+            const reason = /^\d+$/.test(code)
+              ? `HTTP ${code}`
+              : code === 'red'
+                ? tSync('chat.retryReasonNet')
+                : tSync('chat.retryReasonIdle')
+            set({
+              statusText: tSync('chat.retryStatus')
+                .replace('{reason}', reason)
+                .replace('{attempt}', attempt)
+                .replace('{max}', max),
+            })
+            return
+          }
           set({ statusText: status })
         },
         onMetrics: (elapsedMs, tokens, extra) => {

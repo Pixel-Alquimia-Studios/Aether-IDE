@@ -85,11 +85,43 @@ impl Provider for OllamaProvider {
         let response = send_with_retries(request, Some(channel)).await?;
 
         let mut generated_chars: u64 = 0;
+        let mut emitted = false; // algún Delta/Thinking ya llegó al frontend
         // Ollama transmite NDJSON: una línea JSON por evento
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
-        while let Some(chunk) = stream.next().await {
-            let bytes = chunk.map_err(|e| format!("Error recibiendo el stream: {e}"))?;
+        loop {
+            // Inactividad (req. 5): 120 s sin ni un byte = stream muerto
+            let next = tokio::time::timeout(
+                std::time::Duration::from_secs(crate::ai::STREAM_IDLE_SECS),
+                stream.next(),
+            )
+            .await;
+            let item = match next {
+                Err(_) => {
+                    return Err(crate::ai::stream_error(
+                        emitted,
+                        "inactividad",
+                        &format!(
+                            "El stream se quedó sin datos ({} s de inactividad)",
+                            crate::ai::STREAM_IDLE_SECS
+                        ),
+                    ));
+                }
+                Ok(None) => break,
+                Ok(Some(item)) => item,
+            };
+            let bytes = match item {
+                Ok(b) => b,
+                // Corte a mitad del stream: error FINAL si ya hubo contenido,
+                // transitorio (reintentable) si aún no (req. 2)
+                Err(e) => {
+                    return Err(crate::ai::stream_error(
+                        emitted,
+                        "red",
+                        &format!("Error recibiendo el stream: {e}"),
+                    ));
+                }
+            };
             buffer.push_str(&String::from_utf8_lossy(&bytes));
             while let Some(pos) = buffer.find('\n') {
                 let line: String = buffer.drain(..pos + 1).collect();
@@ -106,6 +138,7 @@ impl Provider for OllamaProvider {
                         channel
                             .send(StreamChunk::Thinking { text: reasoning.to_string() })
                             .map_err(|e| format!("Error de IPC: {e}"))?;
+                        emitted = true;
                     }
                 }
                 if let Some(text) = value["message"]["content"].as_str() {
@@ -114,6 +147,7 @@ impl Provider for OllamaProvider {
                         channel
                             .send(StreamChunk::Delta { text: text.to_string() })
                             .map_err(|e| format!("Error de IPC: {e}"))?;
+                        emitted = true;
                     }
                 }
                 if value["done"].as_bool() == Some(true) {
