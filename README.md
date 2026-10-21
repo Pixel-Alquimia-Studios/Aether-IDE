@@ -51,11 +51,11 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > 🚀 Los releases se publican automáticamente con GitHub Actions ([GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest)) y se espejan en `downloads/` del repo por si acaso.
 
-| Archivo | Tipo |
-|---|---|
-| [aether-ide-0.3.1-x64-setup.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador NSIS (Windows x64) |
-| [aether-ide-0.3.1-x64.msi](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | Instalador MSI (Windows x64) |
-| [aether-ide-0.3.1-x64-portable.exe](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest) | **Portable** — ejecutable suelto, sin instalación |
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.3.1-x64-portable.exe](downloads/0.3.1/aether-ide-0.3.1-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 11,8 MB |
+| [aether-ide-0.3.1-x64-setup.exe](downloads/0.3.1/aether-ide-0.3.1-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,64 MB |
+| [aether-ide-0.3.1-x64.msi](downloads/0.3.1/aether-ide-0.3.1-x64.msi) | Instalador MSI (Windows x64) | 6,66 MB |
 
 > ⬆ Los usuarios de v0.3.0+ reciben esta actualización automáticamente (botón **⬆ Actualizar**).
 
