@@ -142,6 +142,11 @@ Release de **endurecimiento (hardening)**: sin features nuevas — auditoría co
 - Los cuerpos de error de los proveedores se truncan antes de mostrarse en el chat (texto controlado por terceros)
 
 **Corregido — Streams y agente**
+- **Reintentos del gateway ante errores transitorios**: 408, 429, 500, 502, 503, **504** y 529 (más errores de conexión/reset) se reintentan con backoff 2 s → 5 s → 10 s — antes solo se reintentaban 429/503 y un "HTTP 504 Gateway Timeout" del proveedor mataba el turno sin más. Se respeta la cabecera `Retry-After` del proveedor (con tope de 30 s); 400/401/403/404 y errores de contenido jamás se reintentan
+- El reintento de la fase de stream **solo ocurre si aún no llegó contenido** al chat (imposible duplicar texto); un corte a mitad de respuesta ya no se silencia — antes se devolvía como si la respuesta estuviera completa
+- **Inactividad del stream**: 120 s sin recibir ni un byte = stream muerto (antes colgaba eternamente); un stream que sigue emitiendo tokens no se corta (tope de seguridad total: 10 min)
+- El backoff entre reintentos es **cancelable al instante**: Detener o cambiar de workspace aborta la espera y no se hace ninguna llamada más
+- Estados claros en el chat mientras se reintenta: *"El proveedor no respondió (HTTP 504). Reintentando 1/3…"* (i18n ES/EN); al agotarse, error legible con el cuerpo del proveedor truncado
 - Stop del chat ya no falla en silencio durante la ventana de reintentos de IPC: token de generación por stream — un stream "resucitado" no puede pisar el mensaje nuevo ni romper el Stop del siguiente
 - Cambiar de workspace con un stream o el agente en vuelo **cancela todo** (antes el agente seguía escribiendo en la carpeta vieja y `streaming` quedaba pegado)
 - Reanudar un chat o cambiar de modo ya no es posible mientras el agente corre (contaminación cruzada de chats); borrar el chat activo limpia sus pasos de agente
@@ -162,7 +167,7 @@ Release de **endurecimiento (hardening)**: sin features nuevas — auditoría co
 
 **Añadido**
 - Parámetro `timeout` (1–600 s) en la herramienta `execute_command` del agente
-- **20 tests unitarios de Rust**: contención de rutas (9), decoder UTF-8 (5), timeout/kill de comandos (2), límites y captura por secciones (4)
+- **25 tests unitarios de Rust**: contención de rutas (9), decoder UTF-8 (5), timeout/kill de comandos (2), límites y captura por secciones (4), reintentos del gateway (5: clasificación de códigos, backoff, Retry-After y contrato transitorio)
 
 **Limitaciones conocidas** (diferidas a 0.4.x)
 - Los checkpoints del Time Travel **no sobreviven a un reinicio** de la app (viven en memoria): tras recargar, editar/eliminar un mensaje anterior revierte el historial del chat pero no los archivos
