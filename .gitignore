@@ -32,6 +32,9 @@ aether-workspace/
 # Solo lectura: no subir a GitHub ni empaquetar
 ECC-main/
 
+# Material de referencia de terceros (skill de búsqueda UX, MIT)
+/ui-ux-pro-max-skill-main/
+
 # Claves privadas del updater
 keys/
 *.key

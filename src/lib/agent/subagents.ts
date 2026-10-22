@@ -108,7 +108,14 @@ export function parseFindings(text: string): AgentFinding[] | null {
 }
 
 /** Herramientas de análisis: subconjunto read-only de las del agente */
-export const SUBAGENT_TOOL_NAMES = new Set(['read_file', 'search_files', 'list_directory'])
+// v0.4.0: design_search se une al set — catálogos UX de solo lectura (los
+// subagentes de análisis y el nuevo /ux pueden consultar guías de diseño)
+export const SUBAGENT_TOOL_NAMES = new Set([
+  'read_file',
+  'search_files',
+  'list_directory',
+  'design_search',
+])
 
 export function stepIsReport(step: AgentStep): boolean {
   return step.type === 'report' && Array.isArray(step.findings)

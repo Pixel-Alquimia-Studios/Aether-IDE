@@ -32,6 +32,7 @@ export default defineConfig({
         '**/Aether-workspace/**',
         '**/aether-workspace/**',
         '**/ECC-main/**',
+        '**/ui-ux-pro-max-skill-main/**',
       ],
     },
   },

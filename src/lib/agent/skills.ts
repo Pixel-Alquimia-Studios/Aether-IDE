@@ -20,7 +20,10 @@ export interface SkillDef {
   body: string
 }
 
-const RAW_SKILLS = import.meta.glob('../resources/subagents/skills/*.md', {
+// RUTA (fix v0.4.0): desde src/lib/agent/ son DOS niveles hasta src/ —
+// '../resources/…' resolvía a src/lib/resources (inexistente) y el glob
+// devolvía vacío: las skills NO se cargaban en ningún build de v0.3.x
+const RAW_SKILLS = import.meta.glob('../../resources/subagents/skills/*.md', {
   query: '?raw',
   import: 'default',
   eager: true,

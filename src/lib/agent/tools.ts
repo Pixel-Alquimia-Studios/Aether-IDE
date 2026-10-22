@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 
+import { searchUx } from '@/lib/agent/uxData'
 import { useAgentStore } from '@/stores/agentStore'
 import type { ToolCall, ToolDef } from '@/types/ai'
 
@@ -8,7 +9,7 @@ const MAX_OUTPUT_CHARS = 2000
 // --- Permisos (regla esencial) ---
 // Herramientas de SOLO LECTURA: disponibles para analizar código.
 // Herramientas MUTADORAS: EXCLUSIVAMENTE del Modo Agente (y con confirmación).
-const READ_ONLY_TOOL_NAMES = new Set(['read_file', 'search_files', 'list_directory'])
+const READ_ONLY_TOOL_NAMES = new Set(['read_file', 'search_files', 'list_directory', 'design_search'])
 const MUTATING_TOOL_NAMES = new Set(['write_file', 'execute_command'])
 
 // Herramientas disponibles para el modo agente. write_file y execute_command
@@ -46,6 +47,23 @@ export const AGENT_TOOLS: ToolDef[] = [
       type: 'object',
       properties: { path: { type: 'string', description: 'Ruta de la carpeta (vacío = raíz)' } },
       required: [],
+    },
+  },
+  {
+    name: 'design_search',
+    description:
+      'Busca guías de UI/UX en una base de conocimiento de diseño (BM25 sobre catálogos curados): estilos UI, paletas de color, tipografías, reglas de razonamiento de design system, recomendaciones de gráficas y accesibilidad. SOLO LECTURA (no toca el workspace). Parámetros: {"query": "qué buscar", "domain": "style|color|typography|ux|charts|icons|ui-reasoning (opcional, auto-detectado)", "max_results": "1-20, default 3"}',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Qué buscar (ej. "dashboard oscuro con acentos violeta")' },
+        domain: {
+          type: 'string',
+          description: 'Dominio opcional: style, color, typography, ux, charts, icons, ui-reasoning',
+        },
+        max_results: { type: 'number', description: 'Resultados máximos (1-20, default 3)' },
+      },
+      required: ['query'],
     },
   },
   {
@@ -185,6 +203,20 @@ export async function runTool(
         return truncateOutput(
           tree.map((n) => `${n.kind === 'directory' ? '[dir]  ' : '       '}${n.path}`).join('\n'),
         )
+      }
+      case 'design_search': {
+        // SOLO LECTURA: busca en los catálogos UX empaquetados (sin tocar el
+        // workspace ni la red — todo es texto local)
+        const query = String(args.query ?? '').trim()
+        if (!query) {
+          return 'ERROR: falta "query" en los argumentos de design_search.'
+        }
+        const domain =
+          typeof args.domain === 'string' && args.domain.trim() !== ''
+            ? args.domain.trim().toLowerCase()
+            : undefined
+        const maxResults = typeof args.max_results === 'number' ? args.max_results : 3
+        return await searchUx(query, domain, maxResults)
       }
       case 'write_file': {
         const path = resolvePath(String(args.path ?? ''), workspaceRoot)

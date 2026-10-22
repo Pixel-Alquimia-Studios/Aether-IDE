@@ -5,6 +5,40 @@ Sus licencias y atribuciones se detallan a continuación.
 
 ---
 
+## ui-ux-pro-max (Next Level Builder)
+
+- **Fuente:** https://github.com/nextlevelbldr/ui-ux-pro-max-skill
+- **Licencia:** MIT (Copyright (c) 2024 Next Level Builder)
+- **Uso:** port a TypeScript del motor de búsqueda BM25 (`src/lib/agent/designSearch.ts`)
+  y los catálogos de datos UX empaquetados (`src/resources/ux/data/*.csv`): estilos,
+  paletas de color, tipografías, guías UX/anti-patrones, tipos de gráficas, iconos y
+  reglas de razonamiento de design systems (`ui-reasoning.csv`). El port recorta los
+  dominios a 7 y sustituye difflib por Levenshtein simple.
+
+MIT License
+
+Copyright (c) 2024 Next Level Builder
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
 ## affaan-m/ECC
 
 - **Fuente:** https://github.com/affaan-m/ECC

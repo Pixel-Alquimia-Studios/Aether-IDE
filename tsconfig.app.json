@@ -28,5 +28,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "ECC-main", "ui-ux-pro-max-skill-main"]
 }
