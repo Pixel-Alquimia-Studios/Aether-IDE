@@ -11,7 +11,7 @@
 // el system prompt resultante sea estable y aproveche la caché de prompt
 // (fase A) — el mensaje system es el prefijo del contexto.
 
-export type SubagentId = 'qa' | 'security' | 'audit'
+export type SubagentId = 'qa' | 'security' | 'audit' | 'ux'
 
 export interface SkillDef {
   name: string
@@ -43,7 +43,7 @@ function parseSkill(raw: string, path: string): SkillDef | null {
   const appliesTo = appliesRaw
     .split(',')
     .map((s) => s.trim().toLowerCase())
-    .filter((s): s is SubagentId => s === 'qa' || s === 'security' || s === 'audit')
+    .filter((s): s is SubagentId => s === 'qa' || s === 'security' || s === 'audit' || s === 'ux')
   if (appliesTo.length === 0) return null
   return { name, description, appliesTo, body: body.trim() }
 }
@@ -55,6 +55,13 @@ export const SKILLS: SkillDef[] = Object.entries(RAW_SKILLS)
   .sort((a, b) => a.name.localeCompare(b.name))
 
 /**
+ * Presupuesto de tokens de las skills (criterio v0.4.0): sin relleno, con
+ * presupuesto TOTAL por ejecución. Estimación chars/4; aviso en consola si
+ * supera ~12K tokens (~48K chars inyectados al system prompt).
+ */
+const TOKEN_BUDGET_CHARS = 48_000
+
+/**
  * Devuelve el bloque de skills concatenado para un subagente (string vacío si
  * no aplica ninguno). Determinista: mismo contenido y mismo orden siempre.
  */
@@ -62,5 +69,13 @@ export function skillsFor(id: SubagentId): string {
   const applicable = SKILLS.filter((s) => s.appliesTo.includes(id))
   if (applicable.length === 0) return ''
   const sections = applicable.map((s) => `### SKILL: ${s.name}\n\n${s.body}`)
-  return `## CONOCIMIENTO ESPECIALIZADO\n\n${sections.join('\n\n---\n\n')}`
+  const block = `## CONOCIMIENTO ESPECIALIZADO\n\n${sections.join('\n\n---\n\n')}`
+  const tokens = Math.round(block.length / 4)
+  if (block.length > TOKEN_BUDGET_CHARS) {
+    console.warn(
+      `[aether] skills de '${id}' inyectan ~${tokens} tokens (> ~12K presupuesto) ` +
+        `en ${applicable.length} skills — considera recortar o partir skills`,
+    )
+  }
+  return block
 }

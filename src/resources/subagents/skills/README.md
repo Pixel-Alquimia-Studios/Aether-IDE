@@ -25,10 +25,17 @@ applies_to: [security]
 
 ## Reglas
 
-- **Cortos**: cada skill se cobra en tokens en cada ejecución del subagente.
+- **Presupuesto total, no límite por skill (v0.4.0)**: prioriza NO perder
+  información valiosa sobre ahorrar bytes. Quita SOLO lo que no aplica a
+  Aether (comandos Bash, herramientas externas, "Prompt Defense Baseline",
+  "Approval Criteria", menciones a git diff). Guía: hasta ~6-8 KB por skill;
+  si lo superas, pártela en dos con `applies_to` distintos en vez de
+  recortarla. El loader (`src/lib/agent/skills.ts`) estima los tokens
+  inyectados (chars/4) y avisa en consola si el total por ejecución supera
+  ~12K tokens.
 - Los subagentes son de **solo lectura**: los skills no pueden pedir escribir
   archivos ni ejecutar comandos, y solo pueden referir a `read_file`,
-  `search_files` y `list_directory`.
+  `search_files`, `list_directory` y `design_search`.
 - Todo ejemplo de salida debe usar el formato exacto del bloque `aether-findings`.
 - Si el contenido deriva de [affaan-m/ECC](https://github.com/affaan-m/ECC) (MIT),
   incluir el comentario de atribución. Ver `THIRD_PARTY_NOTICES.md` en la raíz.

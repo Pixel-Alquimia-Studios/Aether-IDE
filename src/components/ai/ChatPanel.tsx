@@ -74,6 +74,11 @@ const BOT_THEME: Record<string, { ring: string; avatarBg: string; glow: string }
     avatarBg: 'bg-amber-500/15 shadow-[0_0_10px_rgba(245,158,11,0.25)]',
     glow: 'bg-amber-500/[0.03]',
   },
+  UxBot: {
+    ring: 'border-violet-500/30',
+    avatarBg: 'bg-violet-500/15 shadow-[0_0_10px_rgba(139,92,246,0.25)]',
+    glow: 'bg-violet-500/[0.03]',
+  },
 }
 
 export function ChatPanel() {
@@ -528,7 +533,7 @@ export function ChatPanel() {
           <div className="flex h-full items-center justify-center text-aether-text-dim">
             <p className="max-w-[90%] text-center text-[13px]">
               {agentMode === 'agent'
-                ? 'Describe una tarea para el agente o usa /qa, /security, /audit para análisis de solo lectura.'
+                ? 'Describe una tarea para el agente o usa /qa, /security, /audit, /ux para análisis de solo lectura.'
                 : selected
                   ? `Haz una pregunta a ${selected.name} — usa @ para adjuntar contexto`
                   : 'Selecciona un proveedor arriba'}

@@ -4,8 +4,9 @@ import type { AgentFinding, AgentStep } from '@/types/agent'
 import auditbotPrompt from '@/resources/subagents/agents/auditbot.md?raw'
 import bugbotPrompt from '@/resources/subagents/agents/bugbot.md?raw'
 import secbotPrompt from '@/resources/subagents/agents/secbot.md?raw'
-
-// Subagentes de análisis de SOLO LECTURA (v0.1.4): /qa, /security, /audit.
+import uxbobotPrompt from '@/resources/subagents/agents/uxbot.md?raw'
+// v0.4.0: design_search se une al set — catálogos UX de solo lectura (los
+// subagentes de análisis y el nuevo /ux pueden consultar guías de diseño)// Subagentes de análisis de SOLO LECTURA (v0.1.4): /qa, /security, /audit.
 // Analizan el workspace con herramientas de lectura y emiten un reporte
 // catalogado por severidad. JAMÁS modifican archivos (ni siquiera se les
 // ofrecen las herramientas mutadoras).
@@ -18,7 +19,7 @@ import secbotPrompt from '@/resources/subagents/agents/secbot.md?raw'
 // cacheable de los proveedores con prompt caching.
 
 export interface SubagentDef {
-  id: 'qa' | 'security' | 'audit'
+  id: 'qa' | 'security' | 'audit' | 'ux'
   slash: string
   /** Identidad propia del bot (se presenta así en el chat) */
   botName: string
@@ -75,11 +76,22 @@ export const SUBAGENTS: SubagentDef[] = [
       .filter((part) => part.trim().length > 0)
       .join('\n\n'),
   },
+  {
+    id: 'ux',
+    slash: '/ux',
+    botName: 'UxBot',
+    emoji: '🎨',
+    name: 'UX',
+    description: 'Revisión de UI/UX: contraste, foco, responsive y estados',
+    systemPrompt: [uxbobotPrompt, READ_ONLY_RULES, skillsFor('ux'), FINDINGS_FORMAT]
+      .filter((part) => part.trim().length > 0)
+      .join('\n\n'),
+  },
 ]
 
-/** Detecta un subagente por slash inicial (/qa, /security, /audit) */
+/** Detecta un subagente por slash inicial (/qa, /security, /audit, /ux) */
 export function detectSubagent(text: string): { subagent: SubagentDef; task: string } | null {
-  const match = /^\/(qa|security|audit)\b\s*/i.exec(text.trim())
+  const match = /^\/(qa|security|audit|ux)\b\s*/i.exec(text.trim())
   if (!match) return null
   const id = match[1].toLowerCase() as SubagentDef['id']
   const subagent = SUBAGENTS.find((s) => s.id === id)

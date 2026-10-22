@@ -35,4 +35,11 @@ export const CHAT_COMMANDS: ChatCommand[] = [
     avatarClass: 'bg-amber-500/15 shadow-[0_0_10px_rgba(245,158,11,0.25)]',
     insert: '/audit',
   },
+  {
+    name: 'ux',
+    description: 'UxBot: revisión de UI/UX — contraste, foco, responsive',
+    emoji: '🎨',
+    avatarClass: 'bg-violet-500/15 shadow-[0_0_10px_rgba(139,92,246,0.25)]',
+    insert: '/ux',
+  },
 ]
