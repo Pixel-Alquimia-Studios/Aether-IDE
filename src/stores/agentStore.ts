@@ -3,9 +3,11 @@ import { create } from 'zustand'
 import { chatStop, chatWithTools } from '@/lib/ai/api'
 import { buildContextBlock, getActiveEditorContext, resolveMentions } from '@/lib/ai/context'
 import { AGENT_TOOLS, runTool } from '@/lib/agent/tools'
+import { detectProjectLanguages } from '@/lib/agent/languageDetect'
 import { SUBAGENT_TOOL_NAMES, parseFindings, type SubagentDef } from '@/lib/agent/subagents'
 import { getActiveProviderConfig } from '@/stores/settingsStore'
 import { useChatStore } from '@/stores/chatStore'
+import { useEditorStore } from '@/stores/editorStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { AgentCheckpoint, AgentStep } from '@/types/agent'
 import type { MentionContext } from '@/types/chat'
@@ -172,7 +174,15 @@ export const useAgentStore = create<AgentState>()((set) => ({
       ? `${contextBlock}\n\nTarea: ${trimmed}`
       : `Tarea: ${trimmed}`
 
-    const systemPrompt = subagent ? subagent.systemPrompt : AGENT_SYSTEM_PROMPT
+    // Fase 4 (v0.4.0): lenguajes detectados UNA VEZ por invocación (barato:
+    // fileTree ya cargado + pestañas abiertas) — el conjunto se congel aquí
+    // para que el system prompt sea estable y cacheable durante el run
+    const detectedLanguages = detectProjectLanguages(
+      useWorkspaceStore.getState().fileTree,
+      useEditorStore.getState().tabs.map((t) => t.id),
+    )
+
+    const systemPrompt = subagent ? subagent.systemPrompt(detectedLanguages) : AGENT_SYSTEM_PROMPT
     const tools = subagent
       ? AGENT_TOOLS.filter((t) => SUBAGENT_TOOL_NAMES.has(t.name))
       : AGENT_TOOLS

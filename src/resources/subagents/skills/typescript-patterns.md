@@ -2,6 +2,7 @@
 name: typescript-patterns
 description: Patrones de error típicos en TypeScript/React: type safety, async correcto, hooks y manejo de errores
 applies_to: [qa, audit]
+languages: [typescript]
 ---
 
 <!-- Adaptado de affaan-m/ECC (MIT) — https://github.com/affaan-m/ECC/blob/main/agents/typescript-reviewer.md -->

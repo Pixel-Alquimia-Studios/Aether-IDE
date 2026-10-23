@@ -2,6 +2,7 @@
 name: rust-patterns
 description: Patrones de error típicos en Rust: seguridad de memoria, manejo de errores, ownership y concurrencia
 applies_to: [qa, audit]
+languages: [rust]
 ---
 
 <!-- Adaptado de affaan-m/ECC (MIT) — https://github.com/affaan-m/ECC/blob/main/agents/rust-reviewer.md -->

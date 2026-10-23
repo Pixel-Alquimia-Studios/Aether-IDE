@@ -26,7 +26,9 @@ export interface SubagentDef {
   emoji: string
   name: string
   description: string
-  systemPrompt: string
+  /** Construye el system prompt con los lenguajes detectados (fase 4) */
+  /** Construye el system prompt con los lenguajes detectados (fase 4) */
+  systemPrompt: (detectedLanguages: ReadonlySet<string>) => string
 }
 
 const FINDINGS_FORMAT = `
@@ -40,7 +42,7 @@ Reglas del bloque: severity SOLO puede ser "critical", "high", "medium" o "low";
 
 const READ_ONLY_RULES = `REGLAS: eres de SOLO LECTURA — jamás modifiques ni crees archivos. Usa las herramientas de análisis (read_file, search_files, list_directory) para examinar el código REAL antes de opinar. Sé específico: cita archivo y línea.
 
-LECTURA DE ARCHIVOS GRANDES: read_file acepta start_line y end_line para leer POR SECCIONES (p. ej. 1-120, luego 121-240…). El resultado te indica el total de líneas y cómo continuar. NO releas el archivo entero esperando más contenido y NO intentes "reconstruir" archivos con search_files: usa las secciones.`
+LECTURA DE ARCHIVOS GRANDES: read_file acepta start_line y end_line para leer POR SECCIONES (p. ej. 1-120, luego 121-240⬦). El resultado te indica el total de líneas y cómo continuar. NO releas el archivo entero esperando más contenido y NO intentes "reconstruir" archivos con search_files: usa las secciones.`
 
 export const SUBAGENTS: SubagentDef[] = [
   {
@@ -50,9 +52,10 @@ export const SUBAGENTS: SubagentDef[] = [
     emoji: '🐛',
     name: 'QA',
     description: 'Revisión de calidad: bugs, errores lógicos y edge cases',
-    systemPrompt: [bugbotPrompt, READ_ONLY_RULES, skillsFor('qa'), FINDINGS_FORMAT]
-      .filter((part) => part.trim().length > 0)
-      .join('\n\n'),
+    systemPrompt: (langs) =>
+      [bugbotPrompt, READ_ONLY_RULES, skillsFor('qa', langs), FINDINGS_FORMAT]
+        .filter((part) => part.trim().length > 0)
+        .join('\n\n'),
   },
   {
     id: 'security',
@@ -61,9 +64,10 @@ export const SUBAGENTS: SubagentDef[] = [
     emoji: '🛡',
     name: 'Security',
     description: 'Auditoría de seguridad ética: vulnerabilidades y malas prácticas',
-    systemPrompt: [secbotPrompt, READ_ONLY_RULES, skillsFor('security'), FINDINGS_FORMAT]
-      .filter((part) => part.trim().length > 0)
-      .join('\n\n'),
+    systemPrompt: (langs) =>
+      [secbotPrompt, READ_ONLY_RULES, skillsFor('security', langs), FINDINGS_FORMAT]
+        .filter((part) => part.trim().length > 0)
+        .join('\n\n'),
   },
   {
     id: 'audit',
@@ -72,9 +76,10 @@ export const SUBAGENTS: SubagentDef[] = [
     emoji: '📋',
     name: 'Audit',
     description: 'Auditoría completa: calidad (QA) + seguridad en dos pasadas',
-    systemPrompt: [auditbotPrompt, READ_ONLY_RULES, skillsFor('audit'), FINDINGS_FORMAT]
-      .filter((part) => part.trim().length > 0)
-      .join('\n\n'),
+    systemPrompt: (langs) =>
+      [auditbotPrompt, READ_ONLY_RULES, skillsFor('audit', langs), FINDINGS_FORMAT]
+        .filter((part) => part.trim().length > 0)
+        .join('\n\n'),
   },
   {
     id: 'ux',
@@ -83,9 +88,10 @@ export const SUBAGENTS: SubagentDef[] = [
     emoji: '🎨',
     name: 'UX',
     description: 'Revisión de UI/UX: contraste, foco, responsive y estados',
-    systemPrompt: [uxbobotPrompt, READ_ONLY_RULES, skillsFor('ux'), FINDINGS_FORMAT]
-      .filter((part) => part.trim().length > 0)
-      .join('\n\n'),
+    systemPrompt: (langs) =>
+      [uxbobotPrompt, READ_ONLY_RULES, skillsFor('ux', langs), FINDINGS_FORMAT]
+        .filter((part) => part.trim().length > 0)
+        .join('\n\n'),
   },
 ]
 
