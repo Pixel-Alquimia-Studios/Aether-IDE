@@ -52,14 +52,18 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     name: 'design_search',
     description:
-      'Busca guías de UI/UX en una base de conocimiento de diseño (BM25 sobre catálogos curados): estilos UI, paletas de color, tipografías, reglas de razonamiento de design system, recomendaciones de gráficas y accesibilidad. SOLO LECTURA (no toca el workspace). Parámetros: {"query": "qué buscar", "domain": "style|color|typography|ux|charts|icons|ui-reasoning (opcional, auto-detectado)", "max_results": "1-20, default 3"}',
+      'Busca guías de UI/UX en una base de conocimiento de diseño (BM25 sobre catálogos curados). SOLO LECTURA (no toca el workspace ni la red). Usa consultas CORTAS (2-4 palabras) de UN solo tema, en INGLÉS. Dominios y para qué sirve cada uno: "ui-reasoning" = recomendaciones de design system por TIPO DE PRODUCTO (consulta con "developer tool IDE", "saas dashboard"); "style" = estilos UI (glassmorphism, minimalism…) con CSS keywords y checklists; "color" = paletas semánticas por tipo de producto; "typography" = parejas tipográficas con CSS import; "ux" = guías Do/Don\'t y accesibilidad con ejemplos de código; "charts" = qué gráfica usar por tipo de dato + accesibilidad; "icons" = iconos recomendados con import code. Parámetros: {"query": "2-4 palabras en inglés", "domain": "dominio opcional (auto-detectado si falta)", "max_results": "1-20, default 3"}',
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Qué buscar (ej. "dashboard oscuro con acentos violeta")' },
+        query: {
+          type: 'string',
+          description: '2-4 palabras en inglés, un solo tema (ej. "dark dashboard accent")',
+        },
         domain: {
           type: 'string',
-          description: 'Dominio opcional: style, color, typography, ux, charts, icons, ui-reasoning',
+          description:
+            'Opcional. ui-reasoning=recomendaciones por tipo de producto | style=estilos UI | color=paletas | typography=tipografías | ux=Do/Don\'t y accesibilidad | charts=gráficas | icons=iconos',
         },
         max_results: { type: 'number', description: 'Resultados máximos (1-20, default 3)' },
       },

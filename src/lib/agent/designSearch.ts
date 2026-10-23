@@ -195,7 +195,10 @@ interface DomainConfig {
   rewrites: Record<string, string | null>
 }
 
-const DOMAIN_CONFIG: Record<string, DomainConfig> = {
+// Tabla ÚNICA dominio → configuración (incluye el archivo CSV real). Cualquier
+// resolución dominio→archivo DEBE pasar por aquí (el bug de "ux.csv" fue
+// construirla a mano en el loader)
+export const DOMAIN_CONFIG: Record<string, DomainConfig> = {
   style: {
     file: 'styles.csv',
     searchCols: ['Style ID', 'Style Category', 'Aliases', 'Keywords', 'Best For', 'Type', 'AI Prompt Keywords'],

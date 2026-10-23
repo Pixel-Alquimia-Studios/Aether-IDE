@@ -6,7 +6,23 @@ applies_to: [ux]
 
 <!-- Derivado del patrón de skills de Aether; criterios WCAG 2.2 AA y
 referencias de ui-ux-pro-max (MIT — https://github.com/nextlevelbldr/ui-ux-pro-max-skill).
-Fundamenta cada hallazgo con design_search cuando aplique (queries en INGLÉS). -->
+Fundamenta cada hallazgo con design_search cuando aplique (queries en INGLÉS,
+CORTAS: 2-4 palabras de un solo tema). -->
+
+## Qué dominio de design_search consultar para qué
+
+| Dominio | Cuándo usarlo | Query de ejemplo |
+|---|---|---|
+| `ui-reasoning` | Recomendaciones de design system por **TIPO DE PRODUCTO** (patrón de layout, estilo, mood de color) | `"developer tool IDE"` |
+| `style` | Identificar/comparar estilos UI (glassmorphism, minimalism…) con CSS keywords y checklist de implementación | `"glassmorphism cards"` |
+| `color` | Paletas semánticas completas (primary/on-primary/muted/ring…) por tipo de producto | `"fintech palette"` |
+| `typography` | Parejas tipográficas con Google Fonts import y Tailwind config | `"developer tool font pairing"` |
+| `ux` | Guías Do/Don't con ejemplos de código y severidad (touch, foco, navegación) | `"touch target mobile"` |
+| `charts` | Qué gráfica usar según el dato + accesibilidad y librería | `"time series trend"` |
+| `icons` | Icono recomendado por concepto con import code concreto | `"settings gear"` |
+
+Regla práctica: revisando un COMPONENTE usa `ux`/`icons`; eligiendo el look de
+una VISTA o app nueva empieza por `ui-reasoning` y baja a `style`/`color`/`typography`.
 
 ## Checklist de revisión UI/UX (por prioridad)
 
