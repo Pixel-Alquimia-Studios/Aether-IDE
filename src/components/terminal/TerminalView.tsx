@@ -7,7 +7,7 @@ import { listen } from '@tauri-apps/api/event'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
 import { useWorkspaceStore } from '@/stores/workspaceStore'
-import { shouldSpawnTerminal } from '@/lib/startup'
+
 
 // Terminal integrada (Fase 4.4): xterm.js conectado a un PTY nativo en Rust
 // vía eventos 'terminal-output' y comandos terminal_write/resize/kill.
@@ -30,13 +30,17 @@ export function TerminalView({ visible }: { visible: boolean }) {
   const [session, setSession] = useState(0)
   const [exited, setExited] = useState(false)
   // Spawn diferido: flag que sube cuando toca crear la PTY por primera vez
-  const [shouldSpawn, setShouldSpawn] = useState(visible)
+  // (ajuste de estado durante el render, sin effect — mismo patrón que el
+  // reset de zoom del visor de imágenes)
+  const [everVisible, setEverVisible] = useState(visible)
+  if (visible && !everVisible) {
+    setEverVisible(true)
+  }
+  const [shouldSpawn, setShouldSpawn] = useState(everVisible)
+  if (everVisible && !shouldSpawn) {
+    setShouldSpawn(true)
+  }
   const rootPath = useWorkspaceStore((s) => s.rootPath)
-
-  // La primera vez que el panel se hace visible → crear la PTY
-  useEffect(() => {
-    setShouldSpawn((s) => shouldSpawnTerminal(visible, s))
-  }, [visible])
 
   // Cambio de workspace: reinicia la shell con el cwd del nuevo proyecto
   const firstRunRef = useRef(true)
