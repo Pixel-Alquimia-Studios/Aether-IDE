@@ -5,6 +5,9 @@ mod commands_ai;
 mod pty;
 mod secrets;
 
+use tauri::Manager;
+
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -38,6 +41,7 @@ pub fn run() {
             commands::delete_file,
             commands::pick_open_file,
             commands::pick_save_file,
+            commands::show_window,
             commands::exit_app,
             commands_ai::list_providers,
             commands_ai::has_api_key,
@@ -59,6 +63,20 @@ pub fn run() {
             pty::terminal_resize,
             pty::terminal_kill,
         ])
+        // Respaldo OBLIGATORIO (Parte 3, v0.4.0): la ventana nace oculta y el
+        // frontend la muestra al primer render; si el frontend no lo consigue
+        // en ~3 s (crash de arranque, JS roto), Rust la muestra igual — una
+        // falla de arranque nunca deja la app sin ventana visible. show() es
+        // idempotente, así que el orden respecto al frontend da igual.
+        .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    let _ = window.show();
+                });
+            }
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error mientras se ejecutaba Aether IDE")
         .run(|_app, event| {

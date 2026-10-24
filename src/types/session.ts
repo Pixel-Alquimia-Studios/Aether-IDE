@@ -15,4 +15,6 @@ export interface SessionData {
   autoSave: boolean
   /** Modo del panel: 'chat' | 'agent' — se restaura con el chat activo */
   agentMode: string | null
+  /** Terminal abierta al cerrar (Parte 3: spawn diferido de la PTY) */
+  panelVisible?: boolean
 }

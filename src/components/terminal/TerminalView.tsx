@@ -7,6 +7,7 @@ import { listen } from '@tauri-apps/api/event'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { shouldSpawnTerminal } from '@/lib/startup'
 
 // Terminal integrada (Fase 4.4): xterm.js conectado a un PTY nativo en Rust
 // vía eventos 'terminal-output' y comandos terminal_write/resize/kill.
@@ -15,8 +16,12 @@ import { useWorkspaceStore } from '@/stores/workspaceStore'
 // traga teclas ni spamea rechazos), reintenta el resize perdido tras el spawn
 // y ofrece botón de reinicio. El componente lo monta App SIEMPRE (oculto con
 // CSS al cerrar el panel — B4: la PTY sobrevive a Ctrl+J).
+//
+// v0.4.0 (Parte 3): SPAWN DIFERIDO — la PTY no se crea en el arranque sino
+// la primera vez que el panel se hace visible (o al montar si la sesión
+// restaurada lo tenía abierto). Una vez creada, sobrevive a ocultar/mostrar.
 
-export function TerminalView() {
+export function TerminalView({ visible }: { visible: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const terminalIdRef = useRef<string | null>(null)
@@ -24,7 +29,14 @@ export function TerminalView() {
   // Sesión: al reiniciar (botón ↻ o cambio de workspace) se remonta el efecto
   const [session, setSession] = useState(0)
   const [exited, setExited] = useState(false)
+  // Spawn diferido: flag que sube cuando toca crear la PTY por primera vez
+  const [shouldSpawn, setShouldSpawn] = useState(visible)
   const rootPath = useWorkspaceStore((s) => s.rootPath)
+
+  // La primera vez que el panel se hace visible → crear la PTY
+  useEffect(() => {
+    setShouldSpawn((s) => shouldSpawnTerminal(visible, s))
+  }, [visible])
 
   // Cambio de workspace: reinicia la shell con el cwd del nuevo proyecto
   const firstRunRef = useRef(true)
@@ -38,7 +50,8 @@ export function TerminalView() {
   }, [rootPath])
 
   useEffect(() => {
-    if (!isTauri()) return
+    // Spawn diferido (Parte 3): sin sesión activa ni panel visible, no crea PTY
+    if (!isTauri() || !shouldSpawn) return
     const container = containerRef.current
     if (!container) return
 
@@ -161,7 +174,7 @@ export function TerminalView() {
       terminalIdRef.current = null
       term.dispose()
     }
-  }, [session])
+  }, [session, shouldSpawn])
 
   if (!isTauri()) {
     return (

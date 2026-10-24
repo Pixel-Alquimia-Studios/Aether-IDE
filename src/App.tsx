@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { invoke } from '@tauri-apps/api/core'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 
 import { ActivityBar } from '@/components/layout/ActivityBar'
@@ -16,6 +17,7 @@ import { TermsDialog } from '@/components/settings/TermsDialog'
 import { UpdateOverlay } from '@/components/updater/UpdateOverlay'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
+import { scheduleIdle, markStartup } from '@/lib/startup'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
 import { useEditorStore } from '@/stores/editorStore'
 import { useAgentStore } from '@/stores/agentStore'
@@ -40,6 +42,13 @@ export default function App() {
   useKeyboardShortcuts()
   useSession()
 
+  // Parte 3 (v0.4.0): primer hito + mostrar la ventana al primer commit de
+  // React — la ventana nace oculta y aquí ya hay UI pintada (sin flash blanco)
+  useEffect(() => {
+    markStartup('aether:first-render')
+    void invoke('show_window').catch(() => undefined)
+  }, [])
+
   const refreshTree = useWorkspaceStore((s) => s.refreshTree)
   const reloadExternally = useEditorStore((s) => s.reloadExternally)
   const gitRefresh = useGitStore((s) => s.refresh)
@@ -49,7 +58,14 @@ export default function App() {
   // workspace (los chats son por carpeta). Si el chat activo pertenece a otra
   // carpeta, se guarda y se limpia el panel.
   useEffect(() => {
-    void gitRefresh()
+    // Parte 3: el git status inicial compite con el primer render — diferido
+    // a idle. Los cambios de workspace SÍ disparan el refresh inmediato.
+    const firstRun = rootPath === null
+    if (firstRun) {
+      scheduleIdle(() => void gitRefresh())
+    } else {
+      void gitRefresh()
+    }
     const chat = useChatStore.getState()
     if (chat.chatWorkspaceRoot && rootPath && chat.chatWorkspaceRoot !== rootPath) {
       // B2 (v0.3.1): corta TODO el trabajo en vuelo ligado al workspace
@@ -80,17 +96,21 @@ export default function App() {
   )
   useWorkspaceEvents(handleWorkspaceChanged)
 
-  // Fase G: comprobar actualizaciones al abrir la app
+  // Fase G: comprobar actualizaciones al abrir la app. Parte 3: diferido a
+  // idle — la verificación de red no compite con el primer render. Sigue
+  // gating por términos aceptados (tras actualización o primer arranque).
   useEffect(() => {
     if (!termsAccepted()) return
-    void check()
-      .then((update) => {
-        if (update) {
-          setAvailableUpdate(update)
-          setUpdateOverlayOpen(true)
-        }
-      })
-      .catch(() => undefined)
+    scheduleIdle(() => {
+      void check()
+        .then((update) => {
+          if (update) {
+            setAvailableUpdate(update)
+            setUpdateOverlayOpen(true)
+          }
+        })
+        .catch(() => undefined)
+    })
   }, [])
 
   return (
@@ -131,7 +151,7 @@ export default function App() {
           </button>
         </div>
         <div className="min-h-0 flex-1">
-          <TerminalView />
+          <TerminalView visible={panelVisible} />
         </div>
       </div>
       <StatusBar />

@@ -117,6 +117,18 @@ fn ensure_in_workspace(root: &Path, target: &Path) -> Result<PathBuf, String> {
     Ok(target_canon)
 }
 
+/// Muestra la ventana principal (Parte 3, v0.4.0): la ventana nace oculta
+/// (sin flash blanco) y el frontend la muestra al primer render de React.
+/// Idempotente: si ya es visible, no-op. El respaldo de 3 s vive en lib.rs.
+#[tauri::command]
+pub fn show_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn set_workspace(state: State<'_, WorkspaceState>, path: String) -> Result<String, String> {
     let canon = Path::new(&path)
@@ -544,6 +556,9 @@ pub struct SessionData {
     pub active_chat_id: Option<String>,
     pub auto_save: bool,
     pub agent_mode: Option<String>,
+    /// Terminal abierta al cerrar (Parte 3: spawn diferido de la PTY)
+    #[serde(default)]
+    pub panel_visible: bool,
 }
 
 #[tauri::command]

@@ -9,6 +9,7 @@ import { useEditorStore } from '@/stores/editorStore'
 import { useSettingsStore, getActiveProviderConfig } from '@/stores/settingsStore'
 import { useUiStore, type SidebarView } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { markStartup, logStartupIfComplete } from '@/lib/startup'
 import type { SessionData } from '@/types/session'
 
 function buildSession(): SessionData {
@@ -31,6 +32,7 @@ function buildSession(): SessionData {
     activeChatId: useChatStore.getState().chatId,
     autoSave: ui.autoSave,
     agentMode: useAgentStore.getState().mode,
+    panelVisible: ui.panelVisible,
   }
 }
 
@@ -80,6 +82,11 @@ export function useSession(): void {
       if (session.agentMode) {
         const legacyMode = session.agentMode === 'agent' ? 'agent' : 'plan'
         useAgentStore.setState({ mode: legacyMode })
+      }
+      // Parte 3: restaurar si la terminal estaba abierta al cerrar (el spawn
+      // de la PTY es diferido y TerminalView la crea al montar si es visible)
+      if (session.panelVisible) {
+        useUiStore.setState({ panelVisible: true })
       }
       // Restaurar el chat ACTIVO solo si pertenece a la MISMA carpeta:
       // los chats son por workspace (no se mezclan entre proyectos)
@@ -135,7 +142,12 @@ export function useSession(): void {
         // La carpeta pudo borrarse entre sesiones: se ignora
       }
     }
-    void restore()
+    void restore().finally(() => {
+      // Parte 3: tercer hito del arranque — pestañas restauradas (o sesión
+      // ausente). El log único se dispara aquí (o antes si ya completó).
+      markStartup('aether:editor-usable')
+      logStartupIfComplete()
+    })
 
     // Persistencia con debounce (800 ms) ante cambios en cualquier store
     let timer: number | undefined

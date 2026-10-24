@@ -50,6 +50,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { markStartup } from './lib/startup'
+
+// Parte 3 (v0.4.0): primer hito del arranque (eval del módulo principal)
+markStartup('aether:start')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
