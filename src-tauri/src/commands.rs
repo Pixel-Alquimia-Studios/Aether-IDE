@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -36,41 +36,41 @@ const IGNORED_DIRS: &[&str] = &[
     "__pycache__",
 ];
 
-// --- ContenciÃ³n del workspace (v0.3.1, hallazgos S1/S2 del plan de hardening) ---
+// --- Contención del workspace (v0.3.1, hallazgos S1/S2 del plan de hardening) ---
 
 /// Workspace actual conocido por el BACKEND. Se fija con `set_workspace` al
-/// abrir una carpeta (o restaurar la sesiÃ³n). Los comandos que usa el agente
-/// SIEMPRE toman el root de aquÃ­: el frontend no puede enviar un root
-/// alternativo para saltarse la contenciÃ³n.
+/// abrir una carpeta (o restaurar la sesión). Los comandos que usa el agente
+/// SIEMPRE toman el root de aquí: el frontend no puede enviar un root
+/// alternativo para saltarse la contención.
 pub struct WorkspaceState(pub Mutex<Option<PathBuf>>);
 
 fn backend_workspace(state: &State<'_, WorkspaceState>) -> Result<PathBuf, String> {
     let guard = state
         .0
         .lock()
-        .map_err(|_| "El lock del workspace estÃ¡ envenenado".to_string())?;
+        .map_err(|_| "El lock del workspace está envenenado".to_string())?;
     guard
         .clone()
         .ok_or_else(|| "No hay un workspace abierto".to_string())
 }
 
 /// Nombres reservados de Windows (dispositivos). Se compara el stem sin case:
-/// CON.txt, nul.log, etc. tambiÃ©n estÃ¡n reservados.
+/// CON.txt, nul.log, etc. también están reservados.
 const WINDOWS_RESERVED: &[&str] = &[
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
 /// Rechaza nombres reservados de Windows y streams alternos (ADS) en el
-/// componente final: 'CON', 'nul.txt', 'file.txt:stream'â€¦
+/// componente final: 'CON', 'nul.txt', 'file.txt:stream'…
 fn reject_windows_special(target_canon: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
         if let Some(name) = target_canon.file_name().map(|n| n.to_string_lossy().to_string()) {
-            // ADS: dos puntos en el componente final (la unidad nunca aparece aquÃ­)
+            // ADS: dos puntos en el componente final (la unidad nunca aparece aquí)
             if name.contains(':') {
                 return Err(format!(
-                    "Nombre de archivo invÃ¡lido (streams alternos no permitidos): '{name}'"
+                    "Nombre de archivo inválido (streams alternos no permitidos): '{name}'"
                 ));
             }
             let stem = name.split('.').next().unwrap_or(&name).to_uppercase();
@@ -87,11 +87,11 @@ fn reject_windows_special(target_canon: &Path) -> Result<(), String> {
 }
 
 /// Normaliza `target` (resuelve symlinks/junctions y '..') y verifica que
-/// quede DENTRO de `root` (la propia raÃ­z cuenta como dentro; delete_file
-/// aÃ±ade su rechazo de la raÃ­z). Para archivos que aÃºn no existen se
+/// quede DENTRO de `root` (la propia raíz cuenta como dentro; delete_file
+/// añade su rechazo de la raíz). Para archivos que aún no existen se
 /// canonicaliza el directorio padre y se recompone el nombre. En Windows
-/// canonicalize devuelve prefijo `\\?\` â€” se canonicaliza AMBOS lados para
-/// que la comparaciÃ³n sea consistente.
+/// canonicalize devuelve prefijo `\\?\` — se canonicaliza AMBOS lados para
+/// que la comparación sea consistente.
 fn ensure_in_workspace(root: &Path, target: &Path) -> Result<PathBuf, String> {
     let root_canon = root
         .canonicalize()
@@ -109,7 +109,7 @@ fn ensure_in_workspace(root: &Path, target: &Path) -> Result<PathBuf, String> {
     .map_err(|e| format!("No se pudo resolver '{}': {e}", target.display()))?;
     if !target_canon.starts_with(&root_canon) {
         return Err(format!(
-            "La ruta '{}' estÃ¡ fuera del workspace activo",
+            "La ruta '{}' está fuera del workspace activo",
             target.display()
         ));
     }
@@ -125,7 +125,7 @@ pub fn set_workspace(state: State<'_, WorkspaceState>, path: String) -> Result<S
     let mut guard = state
         .0
         .lock()
-        .map_err(|_| "El lock del workspace estÃ¡ envenenado".to_string())?;
+        .map_err(|_| "El lock del workspace está envenenado".to_string())?;
     *guard = Some(canon.clone());
     Ok(canon.to_string_lossy().to_string())
 }
@@ -229,17 +229,17 @@ pub fn read_file(state: State<'_, WorkspaceState>, path: String) -> Result<Strin
     fs::read_to_string(&target).map_err(|e| format!("No se pudo leer '{path}': {e}"))
 }
 
-/// Lectura SIN contenciÃ³n: SOLO para flujos explÃ­citos del usuario
-/// (Archivo â†’ Abrir archivo puede abrir fuera del workspace). Los comandos
-/// que usa el agente van por `read_file`, que sÃ­ contiene.
+/// Lectura SIN contención: SOLO para flujos explícitos del usuario
+/// (Archivo → Abrir archivo puede abrir fuera del workspace). Los comandos
+/// que usa el agente van por `read_file`, que sí contiene.
 #[tauri::command]
 pub fn read_file_user(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("No se pudo leer '{path}': {e}"))
 }
 
-/// Lectura binaria segura para el visualizador de imÃ¡genes: devuelve el
+/// Lectura binaria segura para el visualizador de imágenes: devuelve el
 /// contenido del archivo codificado en base64 (data URL lo construye el
-/// frontend segÃºn la extensiÃ³n)
+/// frontend según la extensión)
 #[tauri::command]
 pub fn read_file_base64(state: State<'_, WorkspaceState>, path: String) -> Result<String, String> {
     let root = backend_workspace(&state)?;
@@ -326,7 +326,7 @@ pub fn read_file_range(
     })
 }
 
-/// ComprobaciÃ³n de existencia para los checkpoints del Time Travel: un fallo
+/// Comprobación de existencia para los checkpoints del Time Travel: un fallo
 /// de read_file (binario, permisos) no distingue "no existe" de "ilegible"
 #[tauri::command]
 pub fn file_exists(state: State<'_, WorkspaceState>, path: String) -> Result<bool, String> {
@@ -342,20 +342,20 @@ pub fn write_file(state: State<'_, WorkspaceState>, path: String, content: Strin
     atomic_write(&target, &content)
 }
 
-/// Escritura SIN contenciÃ³n: SOLO flujos explÃ­citos del usuario (guardar un
-/// archivo abierto con Archivo â†’ Abrir, o Save As fuera del workspace).
+/// Escritura SIN contención: SOLO flujos explícitos del usuario (guardar un
+/// archivo abierto con Archivo → Abrir, o Save As fuera del workspace).
 #[tauri::command]
 pub fn write_file_user(path: String, content: String) -> Result<(), String> {
     atomic_write(Path::new(&path), &content)
 }
 
-/// Escritura atÃ³mica: archivo temporal + rename (evita corrupciÃ³n si el
+/// Escritura atómica: archivo temporal + rename (evita corrupción si el
 /// proceso muere a mitad de escritura)
 fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     let file_name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
-        .ok_or_else(|| format!("Ruta invÃ¡lida: '{}'", path.display()))?;
+        .ok_or_else(|| format!("Ruta inválida: '{}'", path.display()))?;
     let parent = path
         .parent()
         .filter(|p| p.is_dir())
@@ -381,7 +381,7 @@ pub fn read_dir(state: State<'_, WorkspaceState>, path: String) -> Result<Vec<Fi
 
 fn walk_dir(dir: &Path, depth: usize) -> std::io::Result<Vec<FileNode>> {
     let entries = fs::read_dir(dir)?;
-    // Carpetas primero y luego archivos, ambos ordenados alfabÃ©tico case-insensitive
+    // Carpetas primero y luego archivos, ambos ordenados alfabético case-insensitive
     let mut items: Vec<(bool, String, PathBuf)> = entries
         .filter_map(|e| e.ok())
         .map(|e| {
@@ -442,7 +442,7 @@ pub async fn pick_workspace_dir(app: AppHandle) -> Result<Option<String>, String
 
     rx.recv()
         .await
-        .ok_or_else(|| "El diÃ¡logo se cerrÃ³ sin completar la selecciÃ³n".to_string())
+        .ok_or_else(|| "El diálogo se cerró sin completar la selección".to_string())
 }
 
 static WATCHER: Mutex<Option<notify::RecommendedWatcher>> = Mutex::new(None);
@@ -453,8 +453,8 @@ pub fn watch_workspace(
     state: State<'_, WorkspaceState>,
     path: String,
 ) -> Result<(), String> {
-    // Belt and braces: fija tambiÃ©n el workspace del backend (por si
-    // set_workspace no se llamÃ³ antes en algÃºn flujo)
+    // Belt and braces: fija también el workspace del backend (por si
+    // set_workspace no se llamó antes en algún flujo)
     if let Ok(canon) = Path::new(&path).canonicalize() {
         if let Ok(mut guard) = state.0.lock() {
             *guard = Some(canon);
@@ -465,7 +465,7 @@ pub fn watch_workspace(
     {
         let mut guard = WATCHER
             .lock()
-            .map_err(|_| "El lock del watcher estÃ¡ envenenado".to_string())?;
+            .map_err(|_| "El lock del watcher está envenenado".to_string())?;
         *guard = None;
     }
 
@@ -510,7 +510,7 @@ pub fn watch_workspace(
 
     let app_handle = app.clone();
     std::thread::spawn(move || {
-        // Debounce: drena rÃ¡fagas de eventos y emite tras 300 ms de quietud
+        // Debounce: drena ráfagas de eventos y emite tras 300 ms de quietud
         while let Some(mut paths) = rx.recv().ok() {
             loop {
                 match rx.recv_timeout(Duration::from_millis(300)) {
@@ -524,7 +524,7 @@ pub fn watch_workspace(
 
     let mut guard = WATCHER
         .lock()
-        .map_err(|_| "El lock del watcher estÃ¡ envenenado".to_string())?;
+        .map_err(|_| "El lock del watcher está envenenado".to_string())?;
     *guard = Some(watcher);
     Ok(())
 }
@@ -556,7 +556,7 @@ pub fn load_session(app: AppHandle) -> Result<Option<SessionData>, String> {
     if !file.exists() {
         return Ok(None);
     }
-    let raw = fs::read_to_string(&file).map_err(|e| format!("No se pudo leer la sesiÃ³n: {e}"))?;
+    let raw = fs::read_to_string(&file).map_err(|e| format!("No se pudo leer la sesión: {e}"))?;
     match serde_json::from_str(&raw) {
         Ok(session) => Ok(Some(session)),
         Err(_e) => {
@@ -582,11 +582,11 @@ pub fn save_session(app: AppHandle, session: SessionData) -> Result<(), String> 
     let file = dir.join("session.json");
     let tmp = dir.join(".session.json.aether-tmp");
     let raw = serde_json::to_string_pretty(&session)
-        .map_err(|e| format!("No se pudo serializar la sesiÃ³n: {e}"))?;
-    fs::write(&tmp, raw).map_err(|e| format!("No se pudo escribir la sesiÃ³n: {e}"))?;
+        .map_err(|e| format!("No se pudo serializar la sesión: {e}"))?;
+    fs::write(&tmp, raw).map_err(|e| format!("No se pudo escribir la sesión: {e}"))?;
     if let Err(e) = fs::rename(&tmp, &file) {
         let _ = fs::remove_file(&tmp);
-        return Err(format!("No se pudo guardar la sesiÃ³n: {e}"));
+        return Err(format!("No se pudo guardar la sesión: {e}"));
     }
     Ok(())
 }
@@ -620,7 +620,7 @@ pub fn search_files(
     query: String,
     max_results: Option<usize>,
 ) -> Result<Vec<SearchHit>, String> {
-    // La contenciÃ³n es del BACKEND: el root del frontend se ignora (S1)
+    // La contención es del BACKEND: el root del frontend se ignora (S1)
     let workspace = backend_workspace(&state)?;
     let query = query.trim().to_lowercase();
     if query.is_empty() {
@@ -702,10 +702,10 @@ pub async fn execute_command(
     timeout: Option<u64>,
 ) -> Result<CommandOutput, String> {
     if command.trim().is_empty() {
-        return Err("Comando vacÃ­o".to_string());
+        return Err("Comando vacío".to_string());
     }
     // El comando SIEMPRE corre dentro del workspace del backend: un cwd
-    // vacÃ­o usa la raÃ­z, y un cwd explÃ­cito debe estar contenido (S2)
+    // vacío usa la raíz, y un cwd explícito debe estar contenido (S2)
     let workspace = backend_workspace(&state)?;
     let cwd_path = if cwd.trim().is_empty() {
         workspace
@@ -727,10 +727,10 @@ async fn run_command_with_timeout(
 
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        // PowerShell: mejor manejo de rutas con espacios y sintaxis mÃ¡s rica.
+        // PowerShell: mejor manejo de rutas con espacios y sintaxis más rica.
         // Forzamos salida UTF-8 para que los acentos no lleguen con mojibake.
-        // El `exit` final preserva el cÃ³digo real: sin Ã©l, powershell.exe
-        // colapsaba los cÃ³digos nativos (p. ej. `cmd /c exit 5`) a 0/1.
+        // El `exit` final preserva el código real: sin él, powershell.exe
+        // colapsaba los códigos nativos (p. ej. `cmd /c exit 5`) a 0/1.
         let mut c = tokio::process::Command::new("powershell.exe");
         c.args([
             "-NoProfile",
@@ -753,7 +753,7 @@ async fn run_command_with_timeout(
     cmd.current_dir(cwd_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        // Backstop: si el futuro se abandona (cancelaciÃ³n), el hijo muere
+        // Backstop: si el futuro se abandona (cancelación), el hijo muere
         .kill_on_drop(true);
 
     let mut child = cmd
@@ -771,7 +771,7 @@ async fn run_command_with_timeout(
 
     // M1: lectura INCREMENTAL con decoder UTF-8 y tope de chars — se sigue
     // drenando el pipe (para que el hijo no se bloquee) aunque ya no se
-    // guarde mÃ¡s salida, en vez de bufferear todo y truncar al final
+    // guarde más salida, en vez de bufferear todo y truncar al final
     async fn drain_pipe<R: tokio::io::AsyncRead + Unpin>(
         pipe: &mut R,
         decoder: &mut crate::pty::Utf8Decoder,
@@ -815,19 +815,19 @@ async fn run_command_with_timeout(
         Err(_) => {
             kill_process_tree(pid);
             Err(format!(
-                "El comando excediÃ³ el timeout de {} s y fue TERMINADO (sube el parÃ¡metro 'timeout' hasta 600 si necesita mÃ¡s tiempo)",
+                "El comando excedió el timeout de {} s y fue TERMINADO (sube el parámetro 'timeout' hasta 600 si necesita más tiempo)",
                 timeout.as_secs()
             ))
         }
     }
 }
 
-/// Mata el proceso (y su Ã¡rbol en Windows) tras un timeout (M1)
+/// Mata el proceso (y su árbol en Windows) tras un timeout (M1)
 fn kill_process_tree(pid: Option<u32>) {
     let Some(pid) = pid else { return };
     #[cfg(target_os = "windows")]
     {
-        // /T mata el ÃRBOL completo (hijos de la shell incluidos)
+        // /T mata el ÁRBOL completo (hijos de la shell incluidos)
         let _ = Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .output();
@@ -839,7 +839,7 @@ fn kill_process_tree(pid: Option<u32>) {
     }
 }
 
-// --- IntegraciÃ³n Git (Fase 4.3) ---
+// --- Integración Git (Fase 4.3) ---
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -867,11 +867,11 @@ fn run_git(root: &str, args: &[&str]) -> Result<String, String> {
         .args(args)
         .current_dir(root)
         .output()
-        .map_err(|e| format!("No se pudo ejecutar git (Â¿estÃ¡ instalado?): {e}"))?;
+        .map_err(|e| format!("No se pudo ejecutar git (¿está instalado?): {e}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
-            "git fallÃ³".to_string()
+            "git falló".to_string()
         } else {
             stderr
         });
@@ -891,7 +891,7 @@ pub fn git_status(root: String) -> Result<Vec<GitFileStatus>, String> {
         let x = line.chars().next().unwrap_or(' ');
         let y = line.chars().nth(1).unwrap_or(' ');
         let raw_path = &line[3..];
-        // Renames: "R  viejo -> nuevo" â€” mostramos la ruta nueva
+        // Renames: "R  viejo -> nuevo" — mostramos la ruta nueva
         let path = match raw_path.find(" -> ") {
             Some(pos) => raw_path[pos + 4..].to_string(),
             None => raw_path.to_string(),
@@ -983,7 +983,7 @@ pub fn git_unstage(root: String, path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn git_commit(root: String, message: String) -> Result<String, String> {
     if message.trim().is_empty() {
-        return Err("El mensaje de commit estÃ¡ vacÃ­o".to_string());
+        return Err("El mensaje de commit está vacío".to_string());
     }
     run_git(&root, &["commit", "-m", &message])
 }
@@ -998,22 +998,22 @@ pub fn git_pull(root: String) -> Result<String, String> {
     run_git(&root, &["pull"])
 }
 
-// --- Utilidades del shell (menÃº Archivo, Fase 5 UI) ---
+// --- Utilidades del shell (menú Archivo, Fase 5 UI) ---
 
 #[tauri::command]
 pub fn delete_file(state: State<'_, WorkspaceState>, _root: String, path: String) -> Result<(), String> {
     // Seguridad: solo se puede eliminar contenido estrictamente DENTRO del
-    // workspace del BACKEND (el root del frontend se ignora â€” un JS
+    // workspace del BACKEND (el root del frontend se ignora — un JS
     // comprometido no puede ampliar el alcance). Se canonizan ambas rutas
-    // para resistir '..', symlinks y mezclas de separadores; se prohÃ­be
-    // borrar la propia raÃ­z.
+    // para resistir '..', symlinks y mezclas de separadores; se prohíbe
+    // borrar la propia raíz.
     let workspace = backend_workspace(&state)?;
     let root_canon = workspace
         .canonicalize()
         .map_err(|e| format!("No se pudo resolver el workspace: {e}"))?;
     let target_canon = ensure_in_workspace(&workspace, Path::new(&path))?;
     if target_canon == root_canon {
-        return Err("No se puede eliminar la raÃ­z del workspace activo".to_string());
+        return Err("No se puede eliminar la raíz del workspace activo".to_string());
     }
     if target_canon.is_dir() {
         fs::remove_dir_all(&target_canon)
@@ -1038,7 +1038,7 @@ pub async fn pick_open_file(app: AppHandle) -> Result<Option<String>, String> {
         });
     rx.recv()
         .await
-        .ok_or_else(|| "El diÃ¡logo se cerrÃ³ sin completar la selecciÃ³n".to_string())
+        .ok_or_else(|| "El diálogo se cerró sin completar la selección".to_string())
 }
 
 #[tauri::command]
@@ -1060,7 +1060,7 @@ pub async fn pick_save_file(
     });
     rx.recv()
         .await
-        .ok_or_else(|| "El diÃ¡logo se cerrÃ³ sin completar la selecciÃ³n".to_string())
+        .ok_or_else(|| "El diálogo se cerró sin completar la selección".to_string())
 }
 
 #[tauri::command]
@@ -1073,7 +1073,7 @@ pub fn exit_app(app: AppHandle) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    /// Directorio temporal Ãºnico por test (sin dependencias externas)
+    /// Directorio temporal único por test (sin dependencias externas)
     fn tmp_dir(label: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1100,7 +1100,7 @@ mod tests {
         fs::write(&file, "hola").unwrap();
         let resolved = ensure_in_workspace(&root, &file).unwrap();
         assert!(resolved.starts_with(root.canonicalize().unwrap()));
-        // La propia raÃ­z tambiÃ©n es vÃ¡lida (read_dir del explorer)
+        // La propia raíz también es válida (read_dir del explorer)
         assert!(ensure_in_workspace(&root, &root).is_ok());
         cleanup(&root);
     }
@@ -1135,9 +1135,9 @@ mod tests {
     #[test]
     fn archivo_nuevo_requiere_padre_existente() {
         let root = tmp_dir("newfile");
-        // Escritura de un archivo que aÃºn no existe: el padre existe â†’ Ok
+        // Escritura de un archivo que aún no existe: el padre existe → Ok
         assert!(ensure_in_workspace(&root, &root.join("nuevo.txt")).is_ok());
-        // Padre inexistente â†’ Err
+        // Padre inexistente → Err
         assert!(ensure_in_workspace(&root, &root.join("no-existe").join("x.txt")).is_err());
         cleanup(&root);
     }
@@ -1149,7 +1149,7 @@ mod tests {
         assert!(ensure_in_workspace(&root, &root.join("CON")).is_err());
         assert!(ensure_in_workspace(&root, &root.join("nul.txt")).is_err());
         assert!(ensure_in_workspace(&root, &root.join("COM1")).is_err());
-        // Uno legÃ­timo para contrastar
+        // Uno legítimo para contrastar
         assert!(ensure_in_workspace(&root, &root.join("config.txt")).is_ok());
         cleanup(&root);
     }
@@ -1195,7 +1195,7 @@ mod tests {
             cleanup(&outside);
             return;
         }
-        // Un archivo "dentro" vÃ­a junction resuelve FUERA â†’ rechazado
+        // Un archivo "dentro" vía junction resuelve FUERA → rechazado
         let leak = link.join("leak.txt");
         assert!(ensure_in_workspace(&root, &leak).is_err());
         cleanup(&root);
