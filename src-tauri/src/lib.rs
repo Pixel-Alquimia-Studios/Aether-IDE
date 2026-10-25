@@ -58,6 +58,7 @@ pub fn run() {
             chat_history::save_chat,
             chat_history::rename_chat,
             chat_history::delete_chat,
+            pty::list_shells,
             pty::terminal_spawn,
             pty::terminal_write,
             pty::terminal_resize,

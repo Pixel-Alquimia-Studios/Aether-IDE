@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { invoke } from '@tauri-apps/api/core'
 import { check, type Update } from '@tauri-apps/plugin-updater'
@@ -11,13 +11,15 @@ import { StatusBar } from '@/components/layout/StatusBar'
 import { ChatPanel } from '@/components/ai/ChatPanel'
 import { SettingsView } from '@/components/settings/SettingsView'
 import { TerminalView } from '@/components/terminal/TerminalView'
+import { TerminalSidebar } from '@/components/terminal/TerminalSidebar'
+import { useTerminalStore } from '@/stores/terminalStore'
 import { MenuBar } from '@/components/layout/MenuBar'
 import { termsAccepted } from '@/lib/terms'
 import { TermsDialog } from '@/components/settings/TermsDialog'
 import { UpdateOverlay } from '@/components/updater/UpdateOverlay'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
-import { scheduleIdle, markStartup } from '@/lib/startup'
+import { scheduleIdle, markStartup, panelShouldClose } from '@/lib/startup'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
 import { useEditorStore } from '@/stores/editorStore'
 import { useAgentStore } from '@/stores/agentStore'
@@ -25,6 +27,7 @@ import { useChatStore } from '@/stores/chatStore'
 import { useGitStore } from '@/stores/gitStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { useT } from '@/lib/i18n'
 
 export default function App() {
   const sidebarVisible = useUiStore((s) => s.sidebarVisible)
@@ -32,6 +35,10 @@ export default function App() {
   const activeView = useUiStore((s) => s.activeView)
   const panelVisible = useUiStore((s) => s.panelVisible)
   const togglePanel = useUiStore((s) => s.togglePanel)
+  // Lote B: lista de terminales del store
+  const terminals = useTerminalStore((s) => s.terminals)
+  const activeKey = useTerminalStore((s) => s.activeKey)
+  const t = useT()
   const chatPanelVisible = useUiStore((s) => s.chatPanelVisible)
   const termsDialogOpen = useUiStore((s) => s.termsDialogOpen)
   const [termsVisible, setTermsVisible] = useState(() => !termsAccepted())
@@ -96,6 +103,17 @@ export default function App() {
   )
   useWorkspaceEvents(handleWorkspaceChanged)
 
+  // Lote B: cerrar la ÚLTIMA terminal cierra el panel (solo transición — con
+  // cero terminales de arranque el panel ya está cerrado y no se toca)
+  const prevTerminalCount = useRef(terminals.length)
+  useEffect(() => {
+    const prev = prevTerminalCount.current
+    prevTerminalCount.current = terminals.length
+    if (panelVisible && panelShouldClose(prev, terminals.length)) {
+      useUiStore.setState({ panelVisible: false })
+    }
+  }, [terminals.length, panelVisible])
+
   // Fase G: comprobar actualizaciones al abrir la app. Parte 3: diferido a
   // idle — la verificación de red no compite con el primer render. Sigue
   // gating por términos aceptados (tras actualización o primer arranque).
@@ -133,8 +151,9 @@ export default function App() {
         />
       )}
       {/* Panel inferior: terminal integrada (Ctrl+J). B4 (v0.3.1): SIEMPRE
-          montada — ocultar con CSS en vez de desmontar, así la PTY y sus
-          procesos (npm run dev, servidores) sobreviven a Ctrl+J */}
+          montada — ocultar con CSS en vez de desmontar, así las PTY y sus
+          procesos (npm run dev, servidores) sobreviven a Ctrl+J. Lote B:
+          sidebar derecha con lista de terminales + botón + (máx 8). */}
       <div
         className={`h-56 shrink-0 flex-col border-t border-aether-border bg-aether-bg ${
           panelVisible ? 'flex' : 'hidden'
@@ -150,8 +169,24 @@ export default function App() {
             ✕
           </button>
         </div>
-        <div className="min-h-0 flex-1">
-          <TerminalView visible={panelVisible} />
+        <div className="flex min-h-0 flex-1">
+          <div className="relative min-w-0 flex-1">
+            {terminals.length === 0 && (
+              <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-aether-text-dim">
+                {t('term.empty')}
+              </div>
+            )}
+            {/* TODAS las instancias montadas; la activa visible por CSS (B4) */}
+            {terminals.map((entry) => (
+              <div
+                key={entry.key}
+                className={`h-full ${entry.key === activeKey ? 'block' : 'hidden'}`}
+              >
+                <TerminalView terminal={entry} active={entry.key === activeKey} />
+              </div>
+            ))}
+          </div>
+          <TerminalSidebar />
         </div>
       </div>
       <StatusBar />

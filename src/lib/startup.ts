@@ -27,6 +27,11 @@ export function shouldSpawnTerminal(visible: boolean, alreadySpawned: boolean): 
   return visible && !alreadySpawned
 }
 
+/** Cerrar la última terminal cierra el panel (transición, no estado inicial) */
+export function panelShouldClose(prevCount: number, nextCount: number): boolean {
+  return prevCount > 0 && nextCount === 0
+}
+
 // ============ Marcas de arranque ============
 // Hitos: aether:start (eval del módulo principal) → aether:first-render
 // (primer commit de React) → aether:editor-usable (sesión restaurada).

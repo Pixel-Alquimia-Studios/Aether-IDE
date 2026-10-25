@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { useEditorStore } from '@/stores/editorStore'
+import { useTerminalStore } from '@/stores/terminalStore'
 import { useUiStore } from '@/stores/uiStore'
 import { getEditorInstance } from '@/lib/monaco/editorRef'
 
@@ -29,7 +30,16 @@ export function useKeyboardShortcuts(): void {
       }
       if (isCtrl(e) && !e.shiftKey && key === 'j') {
         e.preventDefault()
-        ui.togglePanel()
+        // Lote B: con CERO terminales, Ctrl+J crea una con el shell por
+        // defecto y abre el panel (sin respawn en bucle: con terminales
+        // existentes solo alterna visibilidad — B4 las mantiene vivas)
+        const term = useTerminalStore.getState()
+        if (term.terminals.length === 0) {
+          term.openDefault()
+          ui.showPanel()
+        } else {
+          ui.togglePanel()
+        }
         return
       }
       if (isCtrl(e) && e.shiftKey && key === 'x') {

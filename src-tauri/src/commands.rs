@@ -44,7 +44,7 @@ const IGNORED_DIRS: &[&str] = &[
 /// alternativo para saltarse la contención.
 pub struct WorkspaceState(pub Mutex<Option<PathBuf>>);
 
-fn backend_workspace(state: &State<'_, WorkspaceState>) -> Result<PathBuf, String> {
+pub(crate) fn backend_workspace(state: &State<'_, WorkspaceState>) -> Result<PathBuf, String> {
     let guard = state
         .0
         .lock()

@@ -22,6 +22,8 @@ interface UiState {
   showView: (view: SidebarView) => void
   toggleSidebar: () => void
   togglePanel: () => void
+  /** Abre el panel de terminal (Ctrl+J con cero terminales, Lote B) */
+  showPanel: () => void
   setPaletteOpen: (open: boolean) => void
   setInlineEditOpen: (open: boolean) => void
   toggleAutoSave: () => void
@@ -52,6 +54,7 @@ export const useUiStore = create<UiState>()((set) => ({
   showView: (view) => set({ activeView: view, sidebarVisible: true }),
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
   togglePanel: () => set((state) => ({ panelVisible: !state.panelVisible })),
+  showPanel: () => set({ panelVisible: true }),
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   setInlineEditOpen: (open) => set({ inlineEditOpen: open }),
   toggleAutoSave: () => set((state) => ({ autoSave: !state.autoSave })),

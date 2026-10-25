@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use portable_pty::native_pty_system;
 use portable_pty::{ChildKiller, CommandBuilder, PtySize};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
 
 // Terminal integrada (Fase 4.4): PTY nativo con portable-pty (ConPTY en Windows).
 // Output → evento Tauri 'terminal-output'; input → comando terminal_write.
@@ -105,6 +107,272 @@ impl Utf8Decoder {
     }
 }
 
+// ============ Shells disponibles (Lote B, v0.4.0) ============
+
+/// Shell detectado en el equipo, expuesto al frontend SOLO como id+label —
+/// las rutas y argumentos jamás viajan al frontend (seguridad del Lote B)
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellInfo {
+    pub id: String,
+    pub label: String,
+}
+
+/// Candidato interno: exe + args fijos para construir el CommandBuilder
+#[derive(Debug, Clone)]
+struct ShellCandidate {
+    id: String,
+    label: String,
+    exe: PathBuf,
+    args: Vec<String>,
+    /// WSL: el cwd del workspace viaja como argumento --cd (no como cwd del proceso)
+    wsl_distro: Option<String>,
+}
+
+impl ShellCandidate {
+    fn info(&self) -> ShellInfo {
+        ShellInfo {
+            id: self.id.clone(),
+            label: self.label.clone(),
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_shell_candidates() -> Vec<ShellCandidate> {
+    let mut out = Vec::new();
+    // pwsh (PowerShell 7/6)
+    for (ver, path) in [
+        ("7", r"C:\Program Files\PowerShell\7\pwsh.exe"),
+        ("6", r"C:\Program Files\PowerShell\6\pwsh.exe"),
+    ] {
+        if Path::new(path).exists() {
+            out.push(ShellCandidate {
+                id: "pwsh".into(),
+                label: format!("PowerShell {ver} (pwsh)"),
+                exe: PathBuf::from(path),
+                args: vec![],
+                wsl_distro: None,
+            });
+            break;
+        }
+    }
+    // Windows PowerShell (siempre presente en Windows)
+    let ps = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
+    if Path::new(ps).exists() {
+        out.push(ShellCandidate {
+            id: "powershell".into(),
+            label: "PowerShell".into(),
+            exe: PathBuf::from(ps),
+            args: vec![],
+            wsl_distro: None,
+        });
+    }
+    // cmd
+    let cmd = r"C:\Windows\System32\cmd.exe";
+    if Path::new(cmd).exists() {
+        out.push(ShellCandidate {
+            id: "cmd".into(),
+            label: "cmd".into(),
+            exe: PathBuf::from(cmd),
+            args: vec![],
+            wsl_distro: None,
+        });
+    }
+    // Git Bash: x64, x86 y por-usuario (LOCALAPPDATA)
+    let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    let git_bash = [
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+        r"Git\usr\bin\bash.exe",
+        r"Git\bin\bash.exe",
+    ];
+    let mut git_found = None;
+    for base in [r"C:\Program Files".to_string(), r"C:\Program Files (x86)".to_string(), local] {
+        if base.is_empty() {
+            continue;
+        }
+        for rel in &git_bash {
+            let p = PathBuf::from(&base).join(rel);
+            if p.exists() {
+                git_found = Some(p);
+                break;
+            }
+        }
+        if git_found.is_some() {
+            break;
+        }
+    }
+    if let Some(exe) = git_found {
+        out.push(ShellCandidate {
+            id: "gitbash".into(),
+            label: "Git Bash".into(),
+            exe,
+            // --login -i: necesario para que bash lea perfil y funcione bien en ConPTY
+            args: vec!["--login".into(), "-i".into()],
+            wsl_distro: None,
+        });
+    }
+    // WSL: una entrada por distro instalada (wsl -l -q, con timeout)
+    for distro in wsl_distros() {
+        out.push(ShellCandidate {
+            id: format!("wsl:{distro}"),
+            label: format!("WSL: {distro}"),
+            exe: PathBuf::from("wsl.exe"),
+            args: vec![],
+            wsl_distro: Some(distro),
+        });
+    }
+    out
+}
+
+#[cfg(not(target_os = "windows"))]
+fn unix_shell_candidates() -> Vec<ShellCandidate> {
+    let mut out = Vec::new();
+    let mut push = |id: &str, path: &str| {
+        if Path::new(path).exists() && !out.iter().any(|c: &ShellCandidate| c.id == id) {
+            out.push(ShellCandidate {
+                id: id.into(),
+                label: id.into(),
+                exe: PathBuf::from(path),
+                args: vec![],
+                wsl_distro: None,
+            });
+        }
+    };
+    if let Ok(shell) = std::env::var("SHELL") {
+        if !shell.trim().is_empty() {
+            let id = Path::new(shell.trim())
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| shell.trim().to_string());
+            push(&id, shell.trim());
+        }
+    }
+    push("zsh", "/bin/zsh");
+    push("zsh", "/usr/bin/zsh");
+    push("bash", "/bin/bash");
+    push("bash", "/usr/bin/bash");
+    push("fish", "/usr/bin/fish");
+    push("fish", "/bin/fish");
+    out
+}
+
+#[allow(dead_code)]
+fn detect_shell_candidates() -> Vec<ShellCandidate> {
+    #[cfg(target_os = "windows")]
+    {
+        windows_shell_candidates()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        unix_shell_candidates()
+    }
+}
+
+/// Cache de sesión: list_shells se pide al abrir el menú + (no al arrancar) y
+/// el resultado se reutiliza para validar los shell_id de terminal_spawn
+static SHELLS_CACHE: Mutex<Option<Vec<ShellCandidate>>> = Mutex::new(None);
+
+fn shell_candidates() -> Vec<ShellCandidate> {
+    if let Ok(guard) = SHELLS_CACHE.lock() {
+        if let Some(cached) = guard.as_ref() {
+            return cached.clone();
+        }
+    }
+    let candidates = detect_shell_candidates();
+    if let Ok(mut guard) = SHELLS_CACHE.lock() {
+        *guard = Some(candidates.clone());
+    }
+    candidates
+}
+
+pub fn available_shells() -> Vec<ShellInfo> {
+    shell_candidates().iter().map(|c| c.info()).collect()
+}
+
+/// Parseo de `wsl -l -q`: salida en UTF-16LE con BOM posible y finales CRLF
+fn parse_wsl_distros(raw: &[u8]) -> Vec<String> {
+    let bytes = if raw.starts_with(&[0xFF, 0xFE]) { &raw[2..] } else { raw };
+    let mut units = Vec::with_capacity(bytes.len() / 2);
+    for pair in bytes.chunks(2) {
+        if pair.len() == 2 {
+            units.push(u16::from_le_bytes([pair[0], pair[1]]));
+        }
+    }
+    let text = String::from_utf16_lossy(&units);
+    text.split(['\r', '\n'])
+        .map(|l| l.trim().trim_matches('\0').trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// WSL: `wsl -l -q` con timeout de 3 s (en hilo aparte) — si falla o tarda,
+/// se omite sin romper el resto de la lista
+fn wsl_distros() -> Vec<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let out = Command::new("wsl.exe").args(["-l", "-q"]).output();
+        let _ = tx.send(out);
+    });
+    let Ok(Ok(output)) = rx.recv_timeout(Duration::from_secs(3)) else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_wsl_distros(&output.stdout)
+}
+
+/// Resuelve un shell_id contra la lista DETECTADA (seguridad: el frontend
+/// solo manda ids; rutas y comandos jamás). None → shell por defecto (auto).
+fn shell_command_for(
+    shell_id: Option<&str>,
+    cwd: &Path,
+) -> Result<CommandBuilder, String> {
+    let Some(id) = shell_id else {
+        let mut cmd = detect_shell();
+        cmd.cwd(cwd);
+        return Ok(cmd);
+    };
+    let candidates = shell_candidates();
+    let Some(candidate) = candidates.iter().find(|c| c.id == id) else {
+        let ids: Vec<&str> = candidates.iter().map(|c| c.id.as_str()).collect();
+        return Err(format!(
+            "Shell '{id}' no está disponible en este equipo. Shells detectados: {}",
+            if ids.is_empty() { "ninguno".into() } else { ids.join(", ") }
+        ));
+    };
+    let mut cmd = CommandBuilder::new(&candidate.exe);
+    for arg in &candidate.args {
+        cmd.arg(arg);
+    }
+    match &candidate.wsl_distro {
+        // WSL: el cwd del workspace viaja como --cd (ruta de Windows traducida
+        // por WSL); el cwd del PROCESO queda en home para no confundir a wsl.exe
+        Some(distro) => {
+            cmd.arg("--cd");
+            cmd.arg(cwd.to_string_lossy().to_string());
+            cmd.arg("-d");
+            cmd.arg(distro);
+        }
+        None => {
+            cmd.cwd(cwd);
+        }
+    }
+    Ok(cmd)
+}
+
+/// Lista los shells DETECTADOS en el equipo (Lote B). No corre al arrancar:
+/// el frontend lo pide al abrir el menú +; async + spawn_blocking fuera del
+/// hilo principal; el resultado se cachea por sesión en pty.rs
+#[tauri::command]
+pub async fn list_shells() -> Result<Vec<ShellInfo>, String> {
+    tauri::async_runtime::spawn_blocking(|| Ok(available_shells()))
+        .await
+        .map_err(|e| format!("No se pudo detectar las shells: {e}"))?
+}
+
 struct PtySession {
     writer: Box<dyn Write + Send>,
     _master: Box<dyn portable_pty::MasterPty + Send>,
@@ -126,7 +394,8 @@ pub struct TerminalOutput {
 #[tauri::command]
 pub fn terminal_spawn(
     app: AppHandle,
-    cwd: String,
+    state: State<'_, crate::commands::WorkspaceState>,
+    shell_id: Option<String>,
     rows: Option<u16>,
     cols: Option<u16>,
 ) -> Result<String, String> {
@@ -140,12 +409,14 @@ pub fn terminal_spawn(
         })
         .map_err(|e| format!("No se pudo abrir el PTY: {e}"))?;
 
-    let mut shell = detect_shell();
+    // CWD del ESTADO DE RUST (workspace), nunca del frontend (Lote B, req. 7);
+    // sin workspace → home del usuario (nunca System32)
+    let backend_root = crate::commands::backend_workspace(&state)?;
+    let cwd = resolve_cwd(&backend_root.to_string_lossy());
 
-    // CWD seguro: sin workspace, '.' resolvía al directorio del proceso
-    // (System32 al lanzar desde el menú Inicio)
-    let cwd = resolve_cwd(&cwd);
-    shell.cwd(&cwd);
+    // shell_id validado contra la lista DETECTADA; None → shell por defecto.
+    // Ids desconocidos se rechazan con error claro (seguridad Lote B)
+    let shell = shell_command_for(shell_id.as_deref(), &cwd)?;
     let child = pair
         .slave
         .spawn_command(shell)
@@ -369,5 +640,73 @@ mod tests {
         assert_eq!(dec.feed(&[0x61, 0xC3]), "a");
         // EOF con secuencia incompleta: se emite como U+FFFD sin colgar
         assert_eq!(dec.flush().chars().count(), 1);
+    }
+
+    // ---- Lote B (v0.4.0): shells y validación ----
+
+    #[test]
+    fn parse_wsl_utf16le_con_bom_y_crlf() {
+        // "Ubuntu-22.04\r\nDebian\r\n" en UTF-16LE con BOM FF FE
+        let mut raw: Vec<u8> = vec![0xFF, 0xFE];
+        for ch in "Ubuntu-22.04\r\nDebian\r\n".chars() {
+            raw.extend_from_slice(&(ch as u16).to_le_bytes());
+        }
+        let distros = parse_wsl_distros(&raw);
+        assert_eq!(distros, vec!["Ubuntu-22.04".to_string(), "Debian".to_string()]);
+    }
+
+    #[test]
+    fn parse_wsl_utf16_con_nulos_embedidos() {
+        // WSL a veces rellena con \0 tras cada línea
+        let mut raw: Vec<u8> = vec![0xFF, 0xFE];
+        for ch in "Ubuntu\0\r\n\0".chars() {
+            raw.extend_from_slice(&(ch as u16).to_le_bytes());
+        }
+        let distros = parse_wsl_distros(&raw);
+        assert_eq!(distros, vec!["Ubuntu".to_string()]);
+    }
+
+    #[test]
+    fn parse_wsl_vacio_o_basura_no_paniquea() {
+        assert!(parse_wsl_distros(&[]).is_empty());
+        assert!(parse_wsl_distros(&[0x00]).is_empty()); // byte suelto (chunks impares)
+        let bad = vec![0xFF, 0xFE, 0xD8, 0x00, 0x00, 0x00]; // surrogate alto suelto
+        assert!(parse_wsl_distros(&bad).len() <= 1);
+    }
+
+    #[test]
+    fn shell_command_for_none_usa_el_default() {
+        // Sin shell_id: shell por defecto con el cwd del workspace
+        let cmd = shell_command_for(None, Path::new("C:\\proyecto"));
+        assert!(cmd.is_ok());
+    }
+
+    #[test]
+    fn shell_command_for_id_desconocido_rechazado() {
+        let err = shell_command_for(Some("inventada-999"), Path::new("C:\\proyecto")).unwrap_err();
+        assert!(err.contains("inventada-999"), "el error nombra el id: {err}");
+        assert!(err.contains("Shells detectados"), "lista los disponibles: {err}");
+    }
+
+    #[test]
+    fn shell_command_for_id_detectado_ok() {
+        // Un id del PROPIO equipo pasa la validación (en CI/Windows: powershell o cmd)
+        let shells = available_shells();
+        if shells.is_empty() {
+            return; // entorno sin shells detectables: nada que afirmar
+        }
+        let id = shells[0].id.clone();
+        assert!(shell_command_for(Some(&id), Path::new(".")).is_ok());
+    }
+
+    #[test]
+    fn shells_detectados_ids_unicos_y_con_label() {
+        let shells = available_shells();
+        let mut ids: Vec<&str> = shells.iter().map(|s| s.id.as_str()).collect();
+        ids.sort();
+        let antes = ids.len();
+        ids.dedup();
+        assert_eq!(ids.len(), antes, "ids duplicados: {shells:?}");
+        assert!(shells.iter().all(|s| !s.label.is_empty()));
     }
 }
