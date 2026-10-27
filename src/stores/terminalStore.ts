@@ -30,6 +30,8 @@ export interface TerminalEntry {
   shellId: string
   label: string
   status: TerminalStatus
+  /** Error de spawn/conexión (se muestra EN el panel, nunca "conectando…" infinito) */
+  error?: string
 }
 
 export interface ShellInfo {
@@ -52,6 +54,7 @@ interface TerminalState {
   markRunning: (key: string, rustId: string) => void
   markExited: (rustId: string) => void
   markExitedByKey: (key: string) => void
+  markError: (key: string, message: string) => void
   loadShells: () => Promise<void>
 }
 
@@ -199,6 +202,13 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
       terminals: state.terminals.map((t) => (t.key === key ? { ...t, status: 'exited' } : t)),
     })),
 
+  markError: (key, message) =>
+    set((state) => ({
+      terminals: state.terminals.map((t) =>
+        t.key === key ? { ...t, status: 'exited', error: message } : t,
+      ),
+    })),
+
   // list_shells: al abrir el menú + (no al arrancar); cache de sesión
   loadShells: async () => {
     if (get().shells || get().shellsLoading || !isTauri()) return
@@ -225,8 +235,10 @@ async function spawnFor(key: string): Promise<void> {
       shellId: entry.shellId === 'auto' ? null : entry.shellId,
     })
     useTerminalStore.getState().markRunning(key, rustId)
-  } catch {
-    // Fallo al crear (shell desaparecida, límite del SO…): estado visible
-    useTerminalStore.getState().markExitedByKey(key)
+  } catch (e) {
+    // Fallo al crear (sin workspace, shell desaparecida, límite del SO…):
+    // el error se muestra EN el panel con el botón ↻ — nunca "conectando" infinito
+    const message = e instanceof Error ? e.message : String(e)
+    useTerminalStore.getState().markError(key, message)
   }
 }

@@ -410,8 +410,9 @@ pub fn terminal_spawn(
         .map_err(|e| format!("No se pudo abrir el PTY: {e}"))?;
 
     // CWD del ESTADO DE RUST (workspace), nunca del frontend (Lote B, req. 7);
-    // sin workspace → home del usuario (nunca System32)
-    let backend_root = crate::commands::backend_workspace(&state)?;
+    // sin workspace → home del usuario (nunca System32). No es un error:
+    // Ctrl+J debe funcionar incluso sin carpeta abierta
+    let backend_root = crate::commands::backend_workspace(&state).unwrap_or_default();
     let cwd = resolve_cwd(&backend_root.to_string_lossy());
 
     // shell_id validado contra la lista DETECTADA; None → shell por defecto.
