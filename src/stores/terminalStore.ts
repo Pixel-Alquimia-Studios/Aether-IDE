@@ -84,26 +84,43 @@ export function panelShouldClose(prevCount: number, nextCount: number): boolean 
 
 const pendingOutput = new Map<string, string>()
 const outputSubs = new Map<string, (data: string) => void>()
-let listenersReady = false
 
+/**
+ * Registra los listeners centrales de terminal-output/terminal-exited.
+ * Idempotente: la promesa se guarda y llamadas posteriores devuelven la misma.
+ * spawnFor la AWAIT antes de invocar terminal_spawn (fix de carrera: sin esto
+ * el output de la PTY llegaba antes de que los listeners existieran).
+ * App.tsx la invoca al primer render para "calentar" los listeners.
+ */
+let listenersPromise: Promise<void> | null = null
+
+export function ensureListeners(): Promise<void> {
+  if (!listenersPromise) {
+    listenersPromise = (async () => {
+      if (!isTauri()) return
+      await listen<{ terminalId: string; data: string }>('terminal-output', (event) => {
+        const { terminalId, data } = event.payload
+        const sub = outputSubs.get(terminalId)
+        if (sub) {
+          sub(data)
+          return
+        }
+        // Vista aún no conectada: buffer acotado (el prompt inicial no se pierde)
+        const buffered = (pendingOutput.get(terminalId) ?? '') + data
+        pendingOutput.set(terminalId, buffered.length > 256_000 ? buffered.slice(-256_000) : buffered)
+      })
+      await listen<string>('terminal-exited', (event) => {
+        pendingOutput.delete(event.payload)
+        useTerminalStore.getState().markExited(event.payload)
+      })
+    })()
+  }
+  return listenersPromise
+}
+
+/** Alias de compatibilidad (TerminalView lo invoca en su mount) */
 export function initListeners(): void {
-  if (!isTauri() || listenersReady) return
-  listenersReady = true
-  void listen<{ terminalId: string; data: string }>('terminal-output', (event) => {
-    const { terminalId, data } = event.payload
-    const sub = outputSubs.get(terminalId)
-    if (sub) {
-      sub(data)
-      return
-    }
-    // Vista aún no conectada: buffer acotado (el prompt inicial no se pierde)
-    const buffered = (pendingOutput.get(terminalId) ?? '') + data
-    pendingOutput.set(terminalId, buffered.length > 256_000 ? buffered.slice(-256_000) : buffered)
-  })
-  void listen<string>('terminal-exited', (event) => {
-    pendingOutput.delete(event.payload)
-    useTerminalStore.getState().markExited(event.payload)
-  })
+  void ensureListeners()
 }
 
 /** Suscribe el writer de una vista al output de su PTY (replay del buffer) */
@@ -122,6 +139,12 @@ export function drainPending(rustId: string): string {
   const buffered = pendingOutput.get(rustId) ?? ''
   pendingOutput.delete(rustId)
   return buffered
+}
+
+/** Test-only: simula lo que el listener central hace con el output de la PTY */
+export function pushPendingOutput(rustId: string, data: string): void {
+  const buffered = (pendingOutput.get(rustId) ?? '') + data
+  pendingOutput.set(rustId, buffered.length > 256_000 ? buffered.slice(-256_000) : buffered)
 }
 
 export const useTerminalStore = create<TerminalState>()((set, get) => ({
@@ -223,12 +246,17 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
 }))
 
 async function spawnFor(key: string): Promise<void> {
-  const entry = useTerminalStore.getState().terminals.find((t) => t.key === key)
-  if (!entry || entry.id) return
+  // Sin Tauri: marca exited inmediatamente (sincrono, antes del await)
   if (!isTauri()) {
     useTerminalStore.getState().markExitedByKey(key)
     return
   }
+  // FIX de carrera (v0.4.0): espera a que los listeners centrales estén
+  // registrados ANTES de invocar terminal_spawn — sin esto, el output de la
+  // PTY llegaba antes de que existieran los listeners y se perdía
+  await ensureListeners()
+  const entry = useTerminalStore.getState().terminals.find((t) => t.key === key)
+  if (!entry || entry.id) return
   try {
     // 'auto' → shell_id null en Rust → detect_shell (comportamiento actual)
     const rustId = await invoke<string>('terminal_spawn', {

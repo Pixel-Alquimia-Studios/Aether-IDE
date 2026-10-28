@@ -20,6 +20,7 @@ import { UpdateOverlay } from '@/components/updater/UpdateOverlay'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
 import { scheduleIdle, markStartup, panelShouldClose } from '@/lib/startup'
+import { ensureListeners } from '@/stores/terminalStore'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
 import { useEditorStore } from '@/stores/editorStore'
 import { useAgentStore } from '@/stores/agentStore'
@@ -54,6 +55,8 @@ export default function App() {
   useEffect(() => {
     markStartup('aether:first-render')
     void invoke('show_window').catch(() => undefined)
+    // Calienta los listeners de terminal (evita la carrera listeners vs spawn)
+    void ensureListeners()
   }, [])
 
   const refreshTree = useWorkspaceStore((s) => s.refreshTree)
