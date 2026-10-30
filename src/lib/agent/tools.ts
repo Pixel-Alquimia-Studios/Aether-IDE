@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 
 import { searchUx } from '@/lib/agent/uxData'
+import { evaluatePermission } from '@/lib/agent/permissions'
 import { useAgentStore } from '@/stores/agentStore'
 import type { ToolCall, ToolDef } from '@/types/ai'
 
@@ -234,12 +235,19 @@ export async function runTool(
         // Confirmación (C1): el usuario ve la ruta y el CONTENIDO COMPLETO
         // antes de aprobar. El resolver vive en agentStore para que Stop
         // pueda auto-denegar una aprobación pendiente.
-        const approved = await useAgentStore.getState().requestApproval({
-          kind: 'write_file',
-          path,
-          content,
-        })
-        if (!approved) return 'DENEGADO: el usuario no aprobó escribir este archivo.'
+        // Lote C: evaluación de permisos — si write='allow' y la ruta NO es
+        // protegida, se salta el diálogo (con marcador "auto" en el timeline)
+        const relativePath = path.replace(/^\\\\\?\\/, '').replace(/[\\/]+/g, '/').replace(workspaceRoot.replace(/[\\/]+/g, '/').toLowerCase() + '/', '')
+        const decision = evaluatePermission('write_file', workspaceRoot, { relativePath })
+        if (!decision.auto) {
+          const approved = await useAgentStore.getState().requestApproval({
+            kind: 'write_file',
+            path,
+            content,
+            allowWorkspace: !decision.protectedPath,
+          })
+          if (!approved) return 'DENEGADO: el usuario no aprobó escribir este archivo.'
+        }
         // Checkpoint Time Travel: snapshot del contenido previo antes de
         // escribir. Un fallo de lectura NO significa que el archivo no exista
         // (binario sin UTF-8, permisos): la existencia se comprueba aparte.
@@ -266,11 +274,16 @@ export async function runTool(
         if (typeof command !== 'string' || command.trim() === '') {
           return 'ERROR: falta "command" en los argumentos de execute_command (posible truncado por límite de tokens).'
         }
-        const approved = await useAgentStore.getState().requestApproval({
-          kind: 'execute_command',
-          command,
-        })
-        if (!approved) return 'DENEGADO: el usuario no aprobó ejecutar este comando.'
+        // Lote C: evaluación de permisos — en 'safe' SOLO comandos de la
+        // allowlist se auto-ejecutan; el resto y en 'ask' → diálogo
+        const execDecision = evaluatePermission('execute_command', workspaceRoot, { command })
+        if (!execDecision.auto) {
+          const approved = await useAgentStore.getState().requestApproval({
+            kind: 'execute_command',
+            command,
+          })
+          if (!approved) return 'DENEGADO: el usuario no aprobó ejecutar este comando.'
+        }
         // M1: timeout opcional del agente (segundos, el backend lo capta a 600)
         const timeoutArg = typeof args.timeout === 'number' ? args.timeout : undefined
         const output = await invoke<{ exitCode: number; stdout: string; stderr: string }>(

@@ -16,6 +16,7 @@ import { useEditorStore } from '@/stores/editorStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
+import { setPermissions, getPermissions, revokePermissions } from '@/lib/agent/permissions'
 import type { ChatMessage, MentionContext, ThinkingLevel } from '@/types/chat'
 import type { AgentStep } from '@/types/agent'
 import type { FileNode } from '@/types/workspace'
@@ -176,6 +177,10 @@ export function ChatPanel() {
   const activeTabPath = useEditorStore((s) => s.activeTabId)
   const activeCtxName = activeTabPath ? (activeTabPath.split(/[\\/]/).pop() ?? '') : ''
   const fileTree = useWorkspaceStore((s) => s.fileTree)
+  const rootPath = useWorkspaceStore((s) => s.rootPath)
+  // Lote C: insignia de permisos automáticos activos
+  const autoPerms = rootPath ? getPermissions(rootPath) : null
+  const hasAutoPerms = autoPerms !== null && (autoPerms.write === 'allow' || autoPerms.execute === 'safe')
 
   // Opciones del menú de menciones: archivos del workspace + @codebase + @current
   const mentionOptions = useMemo<MentionContext[]>(() => {
@@ -688,6 +693,21 @@ export function ChatPanel() {
 
       {/* Chips de contexto + menciones (los comandos viven en el menú "/") */}
       <div className="relative border-t border-aether-border p-2">
+        {/* Lote C: insignia de permisos automáticos activos con revocación */}
+        {hasAutoPerms && (
+          <div className="mb-1.5 flex items-center gap-1.5 rounded-md border border-violet-500/30 bg-violet-500/[0.06] px-2 py-1 text-[10px] text-violet-300">
+            <span>⚡ {t('perm.autoActive')}</span>
+            {autoPerms?.write === 'allow' && <span className="rounded-full bg-violet-500/15 px-1.5">{t('perm.write')}</span>}
+            {autoPerms?.execute === 'safe' && <span className="rounded-full bg-violet-500/15 px-1.5">{t('perm.execute')}</span>}
+            <button
+              title={t('perm.revoke')}
+              onClick={() => rootPath && revokePermissions(rootPath)}
+              className="ml-auto rounded px-1 text-violet-400/70 hover:text-violet-300"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {/* C1: confirmación de acciones destructivas — detalle completo ANTES de aprobar */}
         {pendingApproval && (
           <div className="mb-1.5 rounded-lg border border-amber-500/40 bg-amber-500/[0.06] p-2.5 backdrop-blur-xl">
@@ -711,13 +731,26 @@ export function ChatPanel() {
                 {pendingApproval.command}
               </pre>
             )}
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex gap-2 flex-wrap">
               <button
                 onClick={() => resolveApproval(true)}
                 className="rounded bg-gradient-to-br from-emerald-600 to-emerald-500 px-3 py-1 text-[12px] font-medium text-white transition-shadow hover:shadow-[0_0_10px_rgba(16,185,129,0.4)]"
               >
                 ✓ {t('chat.approve')}
               </button>
+              {/* Lote C: "Aprobar y permitir en este workspace" — SOLO para
+                  write_file cuando la ruta no es protegida */}
+              {pendingApproval.allowWorkspace && (
+                <button
+                  onClick={() => {
+                    if (rootPath) setPermissions(rootPath, { write: 'allow' })
+                    resolveApproval(true)
+                  }}
+                  className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[12px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+                >
+                  ✓ {t('chat.approveAllowWorkspace')}
+                </button>
+              )}
               <button
                 onClick={() => resolveApproval(false)}
                 className="rounded border border-red-500/40 px-3 py-1 text-[12px] font-medium text-red-400 transition-colors hover:bg-red-500/10"

@@ -1,8 +1,10 @@
 import { useState } from 'react'
 
 import { useT } from '@/lib/i18n'
+import { getPermissions, setPermissions } from '@/lib/agent/permissions'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useUiStore } from '@/stores/uiStore'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { ProviderInfo } from '@/types/ai'
 
 const MODALITY_LABELS: Record<string, string> = {
@@ -18,7 +20,7 @@ function formatTokens(n: number | null): string {
   return `${Math.round(n / 1000)}k`
 }
 
-type SettingsSection = 'general' | 'providers'
+type SettingsSection = 'general' | 'providers' | 'permissions'
 
 export function SettingsView() {
   const [section, setSection] = useState<SettingsSection>('general')
@@ -52,8 +54,18 @@ export function SettingsView() {
           >
             🔌 {t('settings.providers')}
           </button>
+          <button
+            onClick={() => setSection('permissions')}
+            className={`mt-0.5 flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] ${
+              section === 'permissions'
+                ? 'bg-aether-accent/20 text-white'
+                : 'text-aether-text hover:bg-white/5'
+            }`}
+          >
+            🔐 {t('perm.title')}
+          </button>
         </div>
-        {section === 'general' ? <GeneralSection /> : <ProvidersSection />}
+        {section === 'general' ? <GeneralSection /> : section === 'permissions' ? <PermissionsSection /> : <ProvidersSection />}
       </div>
     </div>
   )
@@ -291,6 +303,83 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
           <p className="mt-2 text-[13px] text-aether-text-dim">{t('settings.localProvider')}</p>
         )}
       </section>
+    </div>
+  )
+}
+
+function PermissionsSection() {
+  const t = useT()
+  const rootPath = useWorkspaceStore((s) => s.rootPath)
+  const current = rootPath ? getPermissions(rootPath) : { write: 'ask' as const, execute: 'ask' as const }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <h2 className="text-[14px] font-semibold text-aether-text">{t('perm.title')}</h2>
+      <p className="mt-1 text-[12px] text-aether-text-dim">{t('perm.description')}</p>
+
+      {!rootPath && <p className="mt-4 text-[12px] text-amber-400">{t('perm.noWorkspace')}</p>}
+
+      {rootPath && (
+        <div className="mt-4 max-w-xl space-y-6">
+          <section>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
+              {t('perm.writeLabel')}
+            </label>
+            <div className="mt-2 space-y-1">
+              <button
+                onClick={() => setPermissions(rootPath, { write: 'ask' })}
+                className={`block w-full max-w-md rounded border px-3 py-2 text-left text-[13px] transition-colors ${
+                  current.write === 'ask'
+                    ? 'border-aether-accent bg-aether-accent/10 text-white'
+                    : 'border-aether-border bg-aether-bg text-aether-text-dim hover:border-aether-border hover:text-aether-text'
+                }`}
+              >
+                {t('perm.writeAsk')}
+              </button>
+              <button
+                onClick={() => setPermissions(rootPath, { write: 'allow' })}
+                className={`block w-full max-w-md rounded border px-3 py-2 text-left text-[13px] transition-colors ${
+                  current.write === 'allow'
+                    ? 'border-aether-accent bg-aether-accent/10 text-white'
+                    : 'border-aether-border bg-aether-bg text-aether-text-dim hover:border-aether-border hover:text-aether-text'
+                }`}
+              >
+                {t('perm.writeAllow')}
+              </button>
+            </div>
+          </section>
+
+          <section>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
+              {t('perm.executeLabel')}
+            </label>
+            <div className="mt-2 space-y-1">
+              <button
+                onClick={() => setPermissions(rootPath, { execute: 'ask' })}
+                className={`block w-full max-w-md rounded border px-3 py-2 text-left text-[13px] transition-colors ${
+                  current.execute === 'ask'
+                    ? 'border-aether-accent bg-aether-accent/10 text-white'
+                    : 'border-aether-border bg-aether-bg text-aether-text-dim hover:border-aether-border hover:text-aether-text'
+                }`}
+              >
+                {t('perm.executeAsk')}
+              </button>
+              <button
+                onClick={() => setPermissions(rootPath, { execute: 'safe' })}
+                className={`block w-full max-w-md rounded border px-3 py-2 text-left text-[13px] transition-colors ${
+                  current.execute === 'safe'
+                    ? 'border-aether-accent bg-aether-accent/10 text-white'
+                    : 'border-aether-border bg-aether-bg text-aether-text-dim hover:border-aether-border hover:text-aether-text'
+                }`}
+              >
+                {t('perm.executeSafe')}
+              </button>
+            </div>
+          </section>
+
+          <p className="text-[11px] leading-relaxed text-aether-text-dim">{t('perm.note')}</p>
+        </div>
+      )}
     </div>
   )
 }

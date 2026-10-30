@@ -44,6 +44,8 @@ export interface PendingApproval {
   path?: string
   content?: string
   command?: string
+  /** Solo true para write_file: ofrece "Aprobar y permitir en este workspace" */
+  allowWorkspace?: boolean
 }
 
 // El resolver vive en el módulo del store (no en el componente): así Stop
