@@ -22,12 +22,7 @@
         color: #e0e0e8;
         user-select: none;
       }
-      #boot .star {
-        font-size: 42px;
-        line-height: 1;
-        color: #a78bfa;
-        text-shadow: 0 0 18px rgba(167, 139, 250, 0.45);
-      }
+      #boot .logo { width: 56px; height: 56px; }
       #boot .name { font-size: 17px; font-weight: 600; letter-spacing: 0.4px; }
       #boot .bar {
         width: 168px;
@@ -57,7 +52,19 @@
   <body>
     <div id="root">
       <div id="boot" aria-busy="true" aria-label="Cargando Aether IDE">
-        <div class="star">✦</div>
+        <!-- Lote E: símbolo SVG inline con IDs únicos (boot-*) -->
+        <svg class="logo" viewBox="0 0 256 256" width="56" height="56" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="boot-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#A78BFA"/>
+              <stop offset="0.55" stop-color="#7C6CF5"/>
+              <stop offset="1" stop-color="#3B82F6"/>
+            </linearGradient>
+          </defs>
+          <circle cx="128" cy="128" r="96" fill="none" stroke="url(#boot-grad)" stroke-width="3" opacity="0.35"/>
+          <path d="M128 48 Q128 128 208 128 Q128 128 128 208 Q128 128 48 128 Q128 128 128 48 Z" fill="url(#boot-grad)"/>
+          <circle cx="196" cy="60" r="7" fill="#A78BFA"/>
+        </svg>
         <div class="name">Aether IDE</div>
         <div class="bar"><i></i></div>
         <div class="hint">preparando el editor…</div>

@@ -35,6 +35,9 @@ ECC-main/
 # Material de referencia de terceros (skill de búsqueda UX, MIT)
 /ui-ux-pro-max-skill-main/
 
+# Previews de brand assets (generados, no versionados)
+.brand-previews/
+
 # Claves privadas del updater
 keys/
 *.key

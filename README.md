@@ -1,6 +1,8 @@
 <div align="center">
 
-# ✦ Aether IDE
+<img src="assets/brand/aether-ide-icon.svg" alt="Aether IDE" width="72" />
+
+# Aether IDE
 
 **Editor de código de escritorio con integración y gestión de APIs de IA**
 

@@ -1,5 +1,6 @@
 import { useUiStore, type SidebarView } from '@/stores/uiStore'
 import { useT } from '@/lib/i18n'
+import { AetherMark } from '@/components/shared/AetherMark'
 
 const VIEWS: Array<{ id: SidebarView; icon: string; group: number }> = [
   { id: 'explorer', icon: '📁', group: 1 },
@@ -27,7 +28,7 @@ export function ActivityBar() {
         title="Aether IDE"
         className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-aether-accent/25 to-aether-accent/5 text-lg text-aether-accent shadow-[0_0_12px_rgba(167,139,250,0.25)]"
       >
-        ✦
+        <AetherMark size={18} variant="gradient" />
       </div>
 
       {VIEWS.map((view, i) => {

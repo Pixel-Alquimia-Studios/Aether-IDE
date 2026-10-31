@@ -1,5 +1,6 @@
 import { acceptTerms } from '@/lib/terms'
 import { useT } from '@/lib/i18n'
+import { AetherMark } from '@/components/shared/AetherMark'
 
 /** Diálogo de Términos y Privacidad: al primer arranque y reabrible desde Ajustes */
 export function TermsDialog({ onAccept }: { onAccept: () => void }) {
@@ -9,7 +10,9 @@ export function TermsDialog({ onAccept }: { onAccept: () => void }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="max-h-[85vh] w-[560px] max-w-[92vw] overflow-hidden rounded-xl border border-white/10 bg-aether-surface/85 shadow-2xl backdrop-blur-2xl">
         <div className="border-b border-aether-border px-5 py-4">
-          <h2 className="text-[16px] font-semibold text-white">✦ Aether IDE</h2>
+          <h2 className="flex items-center gap-1.5 text-[16px] font-semibold text-white">
+            <AetherMark size={18} variant="gradient" /> Aether IDE
+          </h2>
           <p className="mt-1 text-[12px] text-aether-text-dim">
             {t('terms.dialogTitle')}
           </p>

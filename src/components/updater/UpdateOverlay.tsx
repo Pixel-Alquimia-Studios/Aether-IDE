@@ -2,6 +2,8 @@ import { useState } from 'react'
 
 import type { Update } from '@tauri-apps/plugin-updater'
 
+import { AetherMark } from '@/components/shared/AetherMark'
+
 type UpdatePhase = 'confirm' | 'downloading' | 'installing' | 'restarting' | 'error'
 
 export function UpdateOverlay({ update, onClose }: { update: Update; onClose: () => void }) {
@@ -53,7 +55,7 @@ export function UpdateOverlay({ update, onClose }: { update: Update; onClose: ()
     <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="w-[420px] max-w-[90vw] rounded-xl border border-white/10 bg-aether-surface/85 p-6 shadow-2xl backdrop-blur-2xl">
         <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-aether-accent/30 to-aether-accent/5 text-lg text-aether-accent shadow-[0_0_14px_rgba(167,139,250,0.3)]">
-          ✦
+          <AetherMark size={24} variant="gradient" />
         </div>
         <h2 className="text-[18px] font-semibold text-white">
           Aether IDE — Actualización disponible
