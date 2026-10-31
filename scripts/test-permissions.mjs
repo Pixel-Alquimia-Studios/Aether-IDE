@@ -73,6 +73,33 @@ check('.gitmodules protegido', perms.isProtectedPath('.gitmodules'))
 check('package.json protegido', perms.isProtectedPath('package.json'))
 check('src/package.json NO (no es raíz)', !perms.isProtectedPath('src/package.json'))
 
+console.log('== isCommandSafe: contención de rutas (req. 1) ==')
+const testRoot = 'C:\\test\\proj'
+check('cat README.md safe (dentro)', perms.isCommandSafe('cat README.md', testRoot))
+check('cat C:\\Users\\.ssh NO (absoluto fuera)', !perms.isCommandSafe('cat C:\\Users\\test\\.ssh\\id_rsa', testRoot))
+check('cat ../../../etc/passwd NO (escape ..)', !perms.isCommandSafe('cat ../../../etc/passwd', testRoot))
+check('ls /etc NO (absoluto unix)', !perms.isCommandSafe('ls /etc', testRoot))
+check('cat ~/.bashrc NO (home shortcut)', !perms.isCommandSafe('cat ~/.bashrc', testRoot))
+check('cat .env NO (protegida)', !perms.isCommandSafe('cat .env', testRoot))
+check('cat .git/config NO (protegida)', !perms.isCommandSafe('cat .git/config', testRoot))
+check('ls node_modules safe (dentro)', perms.isCommandSafe('ls node_modules', testRoot))
+
+console.log('== isCommandSafe: variables y expansiones (req. 2) ==')
+check('echo $HOME NO (variable)', !perms.isCommandSafe('echo $HOME'))
+check('echo %USERPROFILE% NO (cmd var)', !perms.isCommandSafe('echo %USERPROFILE%'))
+check('echo $env:PATH NO (PS env)', !perms.isCommandSafe('echo $env:PATH'))
+check('echo ${HOME} NO (brace)', !perms.isCommandSafe('echo ${HOME}'))
+check('echo @(ls) NO (PS array)', !perms.isCommandSafe('echo @(ls)'))
+
+console.log('== isCommandSafe: git opciones globales (req. 3) ==')
+check('git -c core.x status NO', !perms.isCommandSafe('git -c core.x status'))
+check('git --git-dir=/tmp status NO', !perms.isCommandSafe('git --git-dir=/tmp status'))
+check('git --no-index diff NO', !perms.isCommandSafe('git --no-index diff'))
+check('git --work-tree=/tmp log NO', !perms.isCommandSafe('git --work-tree=/tmp log'))
+check('git -p status NO', !perms.isCommandSafe('git -p status'))
+check('git diff --no-ext-diff safe', perms.isCommandSafe('git diff --no-ext-diff'))
+check('git diff --no-textconv safe', perms.isCommandSafe('git diff --no-textconv'))
+
 console.log('== evaluatePermission ==')
 delete globalThis.localStorage
 check('write ask auto=false', perms.evaluatePermission('write_file', 'C:\\test\\proj').auto === false)

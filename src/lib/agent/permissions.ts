@@ -183,29 +183,36 @@ interface SafeCommandSpec {
   branchFlags?: Set<string>
   /** git: flags que escriben archivos o son peligrosos — SIEMPRE rechazados */
   rejectedFlags?: RegExp
+  /** git: flags seguros (desactivan comportamiento peligroso) */
+  safeFlags?: Set<string>
   /** true = el comando NO acepta ningún argumento */
   noArgs?: boolean
-  /** true = el comando acepta argumentos libres (inspección sin efectos) */
+  /** true = el comando acepta argumentos libres (sin efectos) */
   allowArgs?: boolean
+  /** true = el comando LEE archivos → los args-ruta deben estar en el workspace */
+  readsFiles?: boolean
 }
 
 const GIT_SUBCOMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch'])
 const GIT_BRANCH_FLAGS = new Set(['--list', '-a', '-v'])
 const GIT_REJECTED_FLAGS = /--output|-o[\s=]|--ext-diff|--textconv|--output-dir|--output-indicator|--patch|--stdin/
+const GIT_GLOBAL_OPTIONS = /^(-c|-C|--git-dir|--work-tree|--exec-path|--namespace|--config-env|-p|--paginate|--no-index|--no-replace-objects)/
+const GIT_SAFE_FLAGS = new Set(['--no-ext-diff', '--no-textconv', '--stat', '--shortstat', '--name-only', '--name-status'])
 
 const SAFE_EXECUTABLES: Record<string, SafeCommandSpec> = {
   git: {
     subcommands: GIT_SUBCOMMANDS,
     branchFlags: GIT_BRANCH_FLAGS,
     rejectedFlags: GIT_REJECTED_FLAGS,
+    safeFlags: GIT_SAFE_FLAGS,
   },
-  ls: { allowArgs: true },
-  dir: { allowArgs: true },
-  cat: { allowArgs: true },
-  type: { allowArgs: true },
-  head: { allowArgs: true },
-  tail: { allowArgs: true },
-  wc: { allowArgs: true },
+  ls: { readsFiles: true },
+  dir: { readsFiles: true },
+  cat: { readsFiles: true },
+  type: { readsFiles: true },
+  head: { readsFiles: true },
+  tail: { readsFiles: true },
+  wc: { readsFiles: true },
   echo: { allowArgs: true },
   pwd: { noArgs: true },
   whoami: { noArgs: true },
@@ -216,11 +223,8 @@ const SAFE_EXECUTABLES: Record<string, SafeCommandSpec> = {
 /**
  * Parser que FALLA CERRADO: determina si un comando es seguro para
  * auto-ejecución en modo 'safe'. Cualquier duda → false (pregunta).
- *
- * Rechaza: redirecciones, subshells, backticks, background &, encoded,
- * comillas sin cerrar, y comandos/argumentos que no están en la allowlist.
  */
-export function isCommandSafe(command: string): boolean {
+export function isCommandSafe(command: string, rootPath?: string): boolean {
   if (!command || !command.trim()) return false
 
   const trimmed = command.trim()
@@ -245,29 +249,37 @@ export function isCommandSafe(command: string): boolean {
   const doubleQuotes = (trimmed.match(/"/g) || []).length
   if (singleQuotes % 2 !== 0 || doubleQuotes % 2 !== 0) return false
 
+  // Rechazar variables y expansiones en cualquier posición (req. 2)
+  if (/\$\{/.test(trimmed)) return false
+  if (/\$env:/i.test(trimmed)) return false
+  if (/\$[a-zA-Z_]/.test(trimmed)) return false
+  if (/%[a-zA-Z_][a-zA-Z_0-9]*%/.test(trimmed)) return false
+  if (/@\(/.test(trimmed)) return false
+
   // Dividir por encadenadores y verificar cada segmento
   const segments = trimmed.split(/\s*(?:;|&&|\|\||\||\r?\n)\s*/)
   for (const segment of segments) {
     const clean = segment.replace(/\s+/g, ' ').trim().toLowerCase()
     if (!clean) continue
-    if (!isSegmentSafe(clean)) return false
+    if (!isSegmentSafe(clean, rootPath)) return false
   }
   return true
 }
 
-function isSegmentSafe(segment: string): boolean {
+function isSegmentSafe(segment: string, rootPath?: string): boolean {
   const tokens = segment.replace(/\s+/g, ' ').trim().toLowerCase().split(' ')
   const cmd = tokens[0]
   const spec = SAFE_EXECUTABLES[cmd]
   if (!spec) return false
 
-  // Sin argumentos (date, hostname, pwd, whoami)
   if (spec.noArgs) return tokens.length === 1
-
-  // git: validación especial de subcomandos y flags
   if (cmd === 'git') return isGitSafe(tokens.slice(1))
 
-  // Comandos con argumentos libres (ls, cat, echo…)
+  const args = tokens.slice(1)
+
+  // Comandos que LEEN archivos: contención de rutas en los argumentos (req. 1)
+  if (spec.readsFiles) return areArgsInWorkspace(args, rootPath)
+
   if (spec.allowArgs) return true
 
   return false
@@ -275,23 +287,77 @@ function isSegmentSafe(segment: string): boolean {
 
 function isGitSafe(args: string[]): boolean {
   if (args.length === 0) return false
-  const subcommand = args[0]
 
-  // Solo subcomandos de inspección
+  // Rechazar opciones globales antes del subcomando (req. 3)
+  if (GIT_GLOBAL_OPTIONS.test(args[0])) return false
+
+  const subcommand = args[0]
   if (!GIT_SUBCOMMANDS.has(subcommand)) return false
 
   const rest = args.slice(1)
 
   // git branch: únicamente --list, -a o -v
   if (subcommand === 'branch') {
-    if (rest.length === 0) return true // git branch (lista local) es seguro
+    if (rest.length === 0) return true
     return rest.every((arg) => GIT_BRANCH_FLAGS.has(arg.toLowerCase()))
   }
 
-  // Rechazar flags que escriben archivos o son peligrosos
-  const joined = rest.join(' ')
+  // Filtrar flags seguros antes de chequear los rechazados
+  const filtered = rest.filter((arg) => !GIT_SAFE_FLAGS.has(arg.toLowerCase()))
+  const joined = filtered.join(' ')
   if (GIT_REJECTED_FLAGS.test(joined)) return false
 
+  return true
+}
+
+/**
+ * Contención de rutas para comandos que LEEN archivos (req. 1):
+ * cada argumento que NO es un flag se verifica para que NO escape del workspace.
+ * Rechaza: rutas absolutas, .., ~, variables, UNC, ADS, nombres reservados,
+ * rutas protegidas (.env, .git/, package.json…).
+ */
+function areArgsInWorkspace(args: string[], rootPath?: string): boolean {
+  for (const arg of args) {
+    if (arg.startsWith('-')) continue
+
+    // Variables y expansiones
+    if (/[$%@]/.test(arg)) return false
+
+    // Rutas absolutas (Windows o Unix) — fuera del workspace
+    if (/^[a-z]:/i.test(arg)) return false
+    if (arg.startsWith('/')) return false
+
+    // UNC
+    if (arg.startsWith('\\\\')) return false
+
+    // Home shortcut
+    if (arg.startsWith('~')) return false
+
+    // Segmentos .. (escape del workspace)
+    const segments = arg.replace(/[\\/]+/g, '/').split('/')
+    if (segments.includes('..')) return false
+
+    // ADS (alternate data streams)
+    const fileName = segments[segments.length - 1] ?? ''
+    if (fileName.includes(':') && !/^[a-z]:$/i.test(fileName)) return false
+
+    // Nombres reservados de Windows
+    const stem = fileName.split('.')[0] ?? ''
+    if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(stem)) return false
+
+    // Rutas protegidas (.env, .git/, package.json…)
+    const relative = segments.join('/')
+    if (isProtectedPath(relative)) return false
+
+    // Contención completa si tenemos el rootPath
+    if (rootPath) {
+      const normalizedRoot = normalizeWorkspaceKey(rootPath)
+      if (normalizedRoot) {
+        const resolved = normalizeWorkspaceKey(normalizedRoot + '/' + relative)
+        if (!resolved || !resolved.startsWith(normalizedRoot + '/')) return false
+      }
+    }
+  }
   return true
 }
 
@@ -331,7 +397,7 @@ export function evaluatePermission(
 
   if (action === 'execute_command') {
     if (perms.execute === 'safe' && options?.command) {
-      decision.auto = isCommandSafe(options.command)
+      decision.auto = isCommandSafe(options.command, rootPath)
     }
   }
 
