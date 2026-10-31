@@ -122,33 +122,103 @@ export function revokePermissions(rootPath: string, isWindows = true): void {
 
 // ============ Rutas protegidas (SIEMPRE preguntan) ============
 
-const PROTECTED_PATTERNS = [/^\.git\//, /^\.github\//, /^\.vscode\//, /^\.env/]
+/**
+ * Prefijos de directorios protegidos: cualquier archivo DENTRO de estos
+ * directorios requiere confirmación, incluso con permiso 'allow'.
+ */
+const PROTECTED_PREFIXES = [
+  /^\.git\//,
+  /^\.github\//,
+  /^\.vscode\//,
+  /^\.husky\//,
+  /^\.cargo\//,
+  /^\.env/,
+]
+
+/**
+ * Archivos protegidos por nombre exacto (la modificación de estos archivos
+ * ejecuta código en la siguiente corrida o filtra credenciales)
+ */
+const PROTECTED_FILES = new Set(['.npmrc', '.gitmodules', 'package.json'])
+
+/**
+ * Normaliza una ruta relativa para el chequeo de rutas protegidas:
+ * resuelve segmentos `..` y `.`, unifica separadores a `/`, lowercase.
+ * Insensible a mayúsculas (seguridad en Windows).
+ */
+export function normalizeRelativePath(relativePath: string): string {
+  let normalized = relativePath.replace(/[\\/]+/g, '/').toLowerCase()
+  const parts: string[] = []
+  for (const segment of normalized.split('/')) {
+    if (segment === '..') parts.pop()
+    else if (segment !== '.' && segment !== '') parts.push(segment)
+  }
+  return parts.join('/')
+}
 
 /**
  * ¿La ruta (relativa al workspace) es una ruta protegida que SIEMPRE
  * requiere confirmación, incluso con permiso 'allow'?
+ * El chequeo se hace sobre la ruta normalizada (resuelve `..`, unifica
+ * separadores, lowercase) para resistir `.GIT/config`, `src/../.git/config`,
+ * `.Git\hooks\pre-commit`, `.ENV.local`, etc.
  */
 export function isProtectedPath(relativePath: string): boolean {
-  const normalized = relativePath.replace(/[\\/]+/g, '/').toLowerCase()
-  return PROTECTED_PATTERNS.some((pattern) => pattern.test(normalized))
+  const normalized = normalizeRelativePath(relativePath)
+  if (!normalized) return false
+  if (PROTECTED_FILES.has(normalized)) return true
+  return PROTECTED_PREFIXES.some((pattern) => pattern.test(normalized))
 }
 
 // ============ Allowlist de execute en modo 'safe' ============
 
-/** Comandos de inspección SIN efectos secundarios permitidos en modo 'safe' */
-const SAFE_COMMANDS = new Set([
-  'git status', 'git diff', 'git log', 'git show', 'git branch', 'git tag',
-  'ls', 'ls -la', 'ls -l', 'ls -al', 'dir', 'dir /b',
-  'cat', 'type', 'head', 'tail', 'wc',
-  'pwd', 'whoami', 'hostname', 'date', 'echo',
-])
+/**
+ * Allowlist CON ARGUMENTOS: cada comando define qué argumentos acepta.
+ * Todo lo que no esté en la lista => pregunta (fail-closed).
+ */
+interface SafeCommandSpec {
+  /** git: subcomandos permitidos */
+  subcommands?: Set<string>
+  /** git branch: únicamente estos flags */
+  branchFlags?: Set<string>
+  /** git: flags que escriben archivos o son peligrosos — SIEMPRE rechazados */
+  rejectedFlags?: RegExp
+  /** true = el comando NO acepta ningún argumento */
+  noArgs?: boolean
+  /** true = el comando acepta argumentos libres (inspección sin efectos) */
+  allowArgs?: boolean
+}
+
+const GIT_SUBCOMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch'])
+const GIT_BRANCH_FLAGS = new Set(['--list', '-a', '-v'])
+const GIT_REJECTED_FLAGS = /--output|-o[\s=]|--ext-diff|--textconv|--output-dir|--output-indicator|--patch|--stdin/
+
+const SAFE_EXECUTABLES: Record<string, SafeCommandSpec> = {
+  git: {
+    subcommands: GIT_SUBCOMMANDS,
+    branchFlags: GIT_BRANCH_FLAGS,
+    rejectedFlags: GIT_REJECTED_FLAGS,
+  },
+  ls: { allowArgs: true },
+  dir: { allowArgs: true },
+  cat: { allowArgs: true },
+  type: { allowArgs: true },
+  head: { allowArgs: true },
+  tail: { allowArgs: true },
+  wc: { allowArgs: true },
+  echo: { allowArgs: true },
+  pwd: { noArgs: true },
+  whoami: { noArgs: true },
+  hostname: { noArgs: true },
+  date: { noArgs: true },
+}
 
 /**
  * Parser que FALLA CERRADO: determina si un comando es seguro para
  * auto-ejecución en modo 'safe'. Cualquier duda → false (pregunta).
  *
  * Rechaza: redirecciones, subshells, backticks, background &, encoded,
- * comillas sin cerrar, y comandos que no están en la allowlist.
+ * comillas sin cerrar, y comandos/argumentos que no están en la allowlist.
  */
 export function isCommandSafe(command: string): boolean {
   if (!command || !command.trim()) return false
@@ -186,17 +256,43 @@ export function isCommandSafe(command: string): boolean {
 }
 
 function isSegmentSafe(segment: string): boolean {
-  const normalized = segment.replace(/\s+/g, ' ').trim().toLowerCase()
-  for (const safe of SAFE_COMMANDS) {
-    if (normalized === safe) return true
-    if (normalized.startsWith(safe + ' ')) {
-      if (safe.startsWith('git ') || ['ls', 'cat', 'type', 'head', 'tail'].includes(safe)) {
-        return true
-      }
-      if (['echo', 'pwd', 'whoami', 'date'].includes(safe)) return true
-    }
-  }
+  const tokens = segment.replace(/\s+/g, ' ').trim().toLowerCase().split(' ')
+  const cmd = tokens[0]
+  const spec = SAFE_EXECUTABLES[cmd]
+  if (!spec) return false
+
+  // Sin argumentos (date, hostname, pwd, whoami)
+  if (spec.noArgs) return tokens.length === 1
+
+  // git: validación especial de subcomandos y flags
+  if (cmd === 'git') return isGitSafe(tokens.slice(1))
+
+  // Comandos con argumentos libres (ls, cat, echo…)
+  if (spec.allowArgs) return true
+
   return false
+}
+
+function isGitSafe(args: string[]): boolean {
+  if (args.length === 0) return false
+  const subcommand = args[0]
+
+  // Solo subcomandos de inspección
+  if (!GIT_SUBCOMMANDS.has(subcommand)) return false
+
+  const rest = args.slice(1)
+
+  // git branch: únicamente --list, -a o -v
+  if (subcommand === 'branch') {
+    if (rest.length === 0) return true // git branch (lista local) es seguro
+    return rest.every((arg) => GIT_BRANCH_FLAGS.has(arg.toLowerCase()))
+  }
+
+  // Rechazar flags que escriben archivos o son peligrosos
+  const joined = rest.join(' ')
+  if (GIT_REJECTED_FLAGS.test(joined)) return false
+
+  return true
 }
 
 // ============ Evaluación de permisos para una acción ============
