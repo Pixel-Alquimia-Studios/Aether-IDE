@@ -23,6 +23,10 @@ pub struct ProviderInfo {
     pub base_url: String,
     pub chat_path: String,
     pub default_models: Vec<ModelInfo>,
+    /// Parámetros que el adaptador OpenAI-compatible NO debe enviar
+    /// (ej. Moonshot: temperature y max_tokens tienen muestreo fijo en kimi-k2)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub omit_params: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -326,11 +330,21 @@ pub(crate) async fn error_from_response(response: reqwest::Response) -> String {
 }
 
 /// Aviso de reintento para el frontend: marcador estructurado
-/// `gateway-retry:{intento}/{máx}:{motivo}` — el chatStore lo traduce con i18n
+/// `gateway-retry:{intento}/{máx}:{motivo}` - el chatStore lo traduce con i18n
 fn notify_retry(channel: Option<&Channel<StreamChunk>>, attempt: u32, reason: &str) {
     if let Some(ch) = channel {
         let _ = ch.send(StreamChunk::Status {
             message: format!("gateway-retry:{attempt}/{MAX_SEND_RETRIES}:{reason}"),
+        });
+    }
+}
+
+/// Aviso del reintento excepcional sin `stream_options.include_usage`
+/// (uno solo, motivo "usage") — usa el mismo marcador con intento 1/1
+pub(crate) fn notify_usage_retry(channel: Option<&Channel<StreamChunk>>) {
+    if let Some(ch) = channel {
+        let _ = ch.send(StreamChunk::Status {
+            message: "gateway-retry:1/1:usage".to_string(),
         });
     }
 }
@@ -448,6 +462,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::multimodal("gpt-4o-mini", 128_000, &[]),
                 ModelInfo::multimodal("gpt-4.1", 1_000_000, &[]),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "deepseek".into(),
@@ -460,6 +475,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("deepseek-chat", 128_000),
                 ModelInfo::with_context("deepseek-reasoner", 128_000),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "mistral".into(),
@@ -472,6 +488,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("mistral-large-latest", 128_000),
                 ModelInfo::with_context("mistral-small-latest", 128_000),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "xai".into(),
@@ -485,6 +502,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("grok-3", 131_072),
                 ModelInfo::with_context("grok-code-fast-1", 256_000),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "groq".into(),
@@ -497,6 +515,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("llama-3.3-70b-versatile", 131_072),
                 ModelInfo::with_context("llama-3.1-8b-instant", 131_072),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "nvidia-nim".into(),
@@ -509,6 +528,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("meta/llama-3.3-70b-instruct", 128_000),
                 ModelInfo::with_context("nvidia/llama-3.1-nemotron-70b-instruct", 128_000),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "together".into(),
@@ -521,6 +541,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("meta-llama/Llama-3.3-70B-Instruct-Turbo", 128_000),
                 ModelInfo::with_context("Qwen/Qwen2.5-Coder-32B-Instruct", 128_000),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "qwen".into(),
@@ -534,6 +555,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("qwen-plus", 131_072),
                 ModelInfo::with_context("qwen-coder-plus", 131_072),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "minimax".into(),
@@ -546,6 +568,7 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
                 ModelInfo::with_context("MiniMax-Text-01", 1_000_000),
                 ModelInfo::with_context("abab6.5s-chat", 16_384),
             ],
+            omit_params: None,
         },
         ProviderInfo {
             id: "lm-studio".into(),
@@ -556,6 +579,77 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
             chat_path: "/chat/completions".into(),
             // Dinámico vía GET /v1/models
             default_models: vec![],
+            omit_params: None,
+        },
+
+        ProviderInfo {
+            id: "openrouter".into(),
+            name: "OpenRouter".into(),
+            kind: "cloud".into(),
+            requires_key: true,
+            base_url: "https://openrouter.ai/api/v1".into(),
+            chat_path: "/chat/completions".into(),
+            default_models: vec![
+                ModelInfo::multimodal("openai/gpt-4o", 128_000, &[]),
+                ModelInfo::with_context("anthropic/claude-3.5-sonnet", 200_000),
+                ModelInfo::with_context("meta-llama/llama-3.3-70b-instruct", 131_072),
+            ],
+            omit_params: None,
+        },
+        ProviderInfo {
+            id: "zai".into(),
+            name: "Z.ai (GLM)".into(),
+            kind: "cloud".into(),
+            requires_key: true,
+            base_url: "https://api.z.ai/api/paas/v4".into(),
+            chat_path: "/chat/completions".into(),
+            default_models: vec![
+                ModelInfo::with_context("glm-4-plus", 128_000),
+                ModelInfo::with_context("glm-4-flash", 128_000),
+                ModelInfo::with_context("glm-4-long", 1_000_000),
+            ],
+            omit_params: None,
+        },
+        ProviderInfo {
+            id: "cerebras".into(),
+            name: "Cerebras".into(),
+            kind: "cloud".into(),
+            requires_key: true,
+            base_url: "https://api.cerebras.ai/v1".into(),
+            chat_path: "/chat/completions".into(),
+            default_models: vec![
+                ModelInfo::with_context("llama-3.3-70b", 128_000),
+                ModelInfo::with_context("llama3.1-8b", 128_000),
+            ],
+            omit_params: None,
+        },
+        ProviderInfo {
+            id: "fireworks".into(),
+            name: "Fireworks AI".into(),
+            kind: "cloud".into(),
+            requires_key: true,
+            base_url: "https://api.fireworks.ai/inference/v1".into(),
+            chat_path: "/chat/completions".into(),
+            default_models: vec![
+                ModelInfo::with_context("accounts/fireworks/models/llama-v3p3-70b-instruct", 131_072),
+                ModelInfo::with_context("accounts/fireworks/models/deepseek-v3", 131_072),
+            ],
+            omit_params: None,
+        },
+        ProviderInfo {
+            id: "moonshot".into(),
+            name: "Moonshot (Kimi)".into(),
+            kind: "cloud".into(),
+            requires_key: true,
+            base_url: "https://api.moonshot.ai/v1".into(),
+            chat_path: "/chat/completions".into(),
+            default_models: vec![
+                ModelInfo::with_context("moonshot-v1-8k", 8_000),
+                ModelInfo::with_context("moonshot-v1-32k", 32_000),
+                ModelInfo::with_context("moonshot-v1-128k", 128_000),
+                ModelInfo::with_context("kimi-k2-0711-preview", 128_000),
+            ],
+            omit_params: Some(vec!["temperature".into(), "max_tokens".into()]),
         },
     ]
 }

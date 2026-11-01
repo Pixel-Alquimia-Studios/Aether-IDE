@@ -25,6 +25,7 @@ impl Provider for GeminiProvider {
                 ModelInfo::multimodal("gemini-2.5-flash", 1_048_576, &["audio", "video"]),
                 ModelInfo::multimodal("gemini-2.5-flash-lite", 1_048_576, &[]),
             ],
+            omit_params: None,
         }
     }
 

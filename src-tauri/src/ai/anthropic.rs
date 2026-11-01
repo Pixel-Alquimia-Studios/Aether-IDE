@@ -26,6 +26,7 @@ impl Provider for AnthropicProvider {
                 ModelInfo::multimodal("claude-opus-4-1", 200_000, &[]),
                 ModelInfo::multimodal("claude-haiku-4-5", 200_000, &[]),
             ],
+            omit_params: None,
         }
     }
 

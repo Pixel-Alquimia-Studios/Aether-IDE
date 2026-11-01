@@ -22,6 +22,7 @@ impl Provider for OllamaProvider {
             chat_path: "/api/chat".into(),
             // Dinámico vía GET /api/tags
             default_models: vec![],
+            omit_params: None,
         }
     }
 

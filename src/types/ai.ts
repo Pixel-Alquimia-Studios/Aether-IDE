@@ -14,6 +14,8 @@ export interface ProviderInfo {
   baseUrl: string
   chatPath?: string
   defaultModels: ModelInfo[]
+  /** Parámetros que el adaptador NO envía (p. ej. Moonshot: temperature, max_tokens) */
+  omitParams?: string[]
 }
 
 export interface ToolDef {

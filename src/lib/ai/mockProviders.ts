@@ -57,4 +57,28 @@ export const MOCK_PROVIDERS: ProviderInfo[] = [
     { id: 'qwen2.5-coder', maxContextTokens: 131072, modalities: ['text'] },
   ]},
   { id: 'lm-studio', name: 'LM Studio (local)', kind: 'local', requiresKey: false, baseUrl: 'http://localhost:1234/v1', defaultModels: [] },
+  { id: 'openrouter', name: 'OpenRouter', kind: 'cloud', requiresKey: true, baseUrl: 'https://openrouter.ai/api/v1', defaultModels: [
+    { id: 'openai/gpt-4o', maxContextTokens: 128000, modalities: ['text', 'image'] },
+    { id: 'anthropic/claude-3.5-sonnet', maxContextTokens: 200000, modalities: ['text'] },
+    { id: 'meta-llama/llama-3.3-70b-instruct', maxContextTokens: 131072, modalities: ['text'] },
+  ]},
+  { id: 'zai', name: 'Z.ai (GLM)', kind: 'cloud', requiresKey: true, baseUrl: 'https://api.z.ai/api/paas/v4', defaultModels: [
+    { id: 'glm-4-plus', maxContextTokens: 128000, modalities: ['text'] },
+    { id: 'glm-4-flash', maxContextTokens: 128000, modalities: ['text'] },
+    { id: 'glm-4-long', maxContextTokens: 1000000, modalities: ['text'] },
+  ]},
+  { id: 'cerebras', name: 'Cerebras', kind: 'cloud', requiresKey: true, baseUrl: 'https://api.cerebras.ai/v1', defaultModels: [
+    { id: 'llama-3.3-70b', maxContextTokens: 128000, modalities: ['text'] },
+    { id: 'llama3.1-8b', maxContextTokens: 128000, modalities: ['text'] },
+  ]},
+  { id: 'fireworks', name: 'Fireworks AI', kind: 'cloud', requiresKey: true, baseUrl: 'https://api.fireworks.ai/inference/v1', defaultModels: [
+    { id: 'accounts/fireworks/models/llama-v3p3-70b-instruct', maxContextTokens: 131072, modalities: ['text'] },
+    { id: 'accounts/fireworks/models/deepseek-v3', maxContextTokens: 131072, modalities: ['text'] },
+  ]},
+  { id: 'moonshot', name: 'Moonshot (Kimi)', kind: 'cloud', requiresKey: true, baseUrl: 'https://api.moonshot.ai/v1', omitParams: ['temperature', 'max_tokens'], defaultModels: [
+    { id: 'moonshot-v1-8k', maxContextTokens: 8000, modalities: ['text'] },
+    { id: 'moonshot-v1-32k', maxContextTokens: 32000, modalities: ['text'] },
+    { id: 'moonshot-v1-128k', maxContextTokens: 128000, modalities: ['text'] },
+    { id: 'kimi-k2-0711-preview', maxContextTokens: 128000, modalities: ['text'] },
+  ]},
 ]
