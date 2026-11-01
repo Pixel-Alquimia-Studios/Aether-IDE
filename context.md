@@ -102,8 +102,8 @@ Aether IDE/
 - Barra de menú **Archivo**: New/Open/Save/Save As, Auto Save, Preferences, Exit
 - Command Palette (`Ctrl+Shift+P`) con búsqueda difusa y quick open
 
-### IA — gateway multi-proveedor (13 proveedores)
-OpenAI, Anthropic (Claude), DeepSeek, Mistral, xAI (Grok), Groq, NVIDIA NIM, Together, Qwen, MiniMax, Google Gemini, Ollama y LM Studio (locales).
+### IA — gateway multi-proveedor (18 proveedores más el proveedor personalizado)
+OpenAI, Anthropic (Claude), DeepSeek, Mistral, xAI (Grok), Groq, NVIDIA NIM, Together, Qwen, MiniMax, Google Gemini, Ollama y LM Studio (locales), más OpenRouter, Z.ai, Cerebras, Fireworks y Moonshot, y un proveedor personalizado con URL base OpenAI-compatible validada en Rust.
 - **Chat con streaming** por canal IPC nativo, selector de nivel de razonamiento (Low/Medium/High/Max)
 - **Bloques de razonamiento** colapsables (chain of thought)
 - **Modo Agente con tool-calling**: `read_file`, `search_files`, `list_directory`, `write_file`, `execute_command` — con confirmación del usuario para acciones destructivas y bucle de hasta 20 pasos

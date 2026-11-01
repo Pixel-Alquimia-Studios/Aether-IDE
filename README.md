@@ -26,7 +26,7 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 - Command Palette (`Ctrl+Shift+P`) con búsqueda difusa + quick open de archivos
 
 ### IA (gateway multi-proveedor)
-- **13 proveedores**: OpenAI, Anthropic (Claude), DeepSeek, Mistral, xAI (Grok), Groq, NVIDIA NIM, Together, Qwen, MiniMax, Google Gemini, Ollama y LM Studio (locales)
+- **18 proveedores** (13 + OpenRouter, Z.ai, Cerebras, Fireworks y Moonshot) más el proveedor personalizado: OpenAI, Anthropic (Claude), DeepSeek, Mistral, xAI (Grok), Groq, NVIDIA NIM, Together, Qwen, MiniMax, Google Gemini, Ollama y LM Studio (locales)
 - **Chat con streaming** por canal IPC nativo, con selector de **nivel de razonamiento** (Low/Medium/High/Max) para modelos thinking
 - **Bloques de razonamiento** colapsables (Chain of Thought de DeepSeek R1, Claude, o-series…)
 - **Modo Agente con tool-calling**: `read_file`, `search_files`, `list_directory`, `write_file` y `execute_command` — con **confirmación del usuario** para acciones destructivas
@@ -314,7 +314,7 @@ Aether IDE/
 │   └── hooks/            # atajos, sesión, eventos del watcher
 └── src-tauri/            # Backend Rust
     └── src/
-        ├── ai/           # Trait Provider + adaptadores (13 proveedores) + tool-calling
+        ├── ai/           # Trait Provider + adaptadores (18 proveedores más el proveedor personalizado) + tool-calling
         ├── commands.rs   # FS, watcher (notify), Git, diálogos
         ├── chat_history.rs
         ├── pty.rs        # Terminal integrada (portable-pty / ConPTY)
