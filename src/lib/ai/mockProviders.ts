@@ -81,4 +81,6 @@ export const MOCK_PROVIDERS: ProviderInfo[] = [
     { id: 'moonshot-v1-128k', maxContextTokens: 128000, modalities: ['text'] },
     { id: 'kimi-k2-0711-preview', maxContextTokens: 128000, modalities: ['text'] },
   ]},
+  // El personalizado SIEMPRE al final: nunca queda preseleccionado
+  { id: 'custom', name: 'Proveedor personalizado', kind: 'cloud', requiresKey: true, baseUrl: '', defaultModels: [] },
 ]

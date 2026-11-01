@@ -174,6 +174,17 @@ const en = {
   'settings.keychainNote':
     'The key is stored in the OS keychain (Credential Manager on Windows, Keychain on macOS). It is never written to plain files nor exposed to the frontend.',
   'settings.localProvider': 'Local provider — no API key required.',
+  // Proveedor personalizado (URL base OpenAI-compatible)
+  'settings.customUrl': 'Base URL (OpenAI-compatible)',
+  'settings.customUrlHint': 'https://server.com/v1 or http://localhost:8000/v1',
+  'settings.customSave': 'Save URL',
+  'settings.customNoUrl': 'Base URL not configured yet',
+  'settings.customKeyHost': 'The API key will be sent to:',
+  'settings.customKeyWarning':
+    'HTTPS is required for public hosts; HTTP only for loopback, private networks (10.x, 172.16-31.x, 192.168.x) or *.local. The URL is validated and stored in the Rust backend.',
+  'settings.customUrlSaved': 'URL saved.',
+  'settings.customKeyRemoved':
+    'The server changed — the saved API key was deleted. Enter it again.',
   // Terms (Fase F: legal)
   'terms.dialogTitle': 'Terms of Service and Privacy Policy',
   'terms.summary':
@@ -365,6 +376,17 @@ const es: Record<TranslationKey, string> = {
   'settings.keychainNote':
     'La clave se guarda en el keychain del sistema operativo (Credential Manager en Windows, Keychain en macOS). Nunca se escribe en archivos planos ni se expone al frontend.',
   'settings.localProvider': 'Proveedor local — no requiere API key.',
+  // Proveedor personalizado (URL base OpenAI-compatible)
+  'settings.customUrl': 'URL base (compatible con OpenAI)',
+  'settings.customUrlHint': 'https://servidor.com/v1 o http://localhost:8000/v1',
+  'settings.customSave': 'Guardar URL',
+  'settings.customNoUrl': 'URL base sin configurar todavía',
+  'settings.customKeyHost': 'La API key se enviará a:',
+  'settings.customKeyWarning':
+    'HTTPS obligatorio para hosts públicos; HTTP solo para loopback, redes privadas (10.x, 172.16-31.x, 192.168.x) o *.local. La URL se valida y guarda en el backend Rust.',
+  'settings.customUrlSaved': 'URL guardada.',
+  'settings.customKeyRemoved':
+    'El servidor cambió — la API key guardada se borró. Introdúcela de nuevo.',
   // Terms (Fase F: legal)
   'terms.dialogTitle': 'Términos del Servicio y Política de Privacidad',
   'terms.summary':

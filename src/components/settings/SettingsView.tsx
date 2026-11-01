@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { useT } from '@/lib/i18n'
+import { saveCustomBaseUrl } from '@/lib/ai/api'
 import { getPermissions, setPermissions } from '@/lib/agent/permissions'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -174,6 +175,86 @@ function ProvidersSection() {
   )
 }
 
+function CustomBaseUrlSection({ savedUrl }: { savedUrl: string }) {
+  const t = useT()
+  const [urlInput, setUrlInput] = useState(savedUrl)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [keyRemoved, setKeyRemoved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const loadProviders = useSettingsStore((s) => s.loadProviders)
+
+  // Host:puerto exacto al que se enviará la key (feedback en vivo)
+  let host: string | null = null
+  try {
+    if (urlInput.trim()) host = new URL(urlInput.trim()).host || null
+  } catch {
+    host = null
+  }
+
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    setKeyRemoved(false)
+    try {
+      const keyWasRemoved = await saveCustomBaseUrl(urlInput.trim() || null)
+      setSaved(true)
+      if (keyWasRemoved) {
+        setKeyRemoved(true)
+        // Refresca keyConfigured: el badge pasa a "sin key" para re-pedirla
+        void loadProviders()
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="mt-6">
+      <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">
+        {t('settings.customUrl')}
+      </label>
+      <div className="mt-2 flex max-w-xl gap-2">
+        <input
+          value={urlInput}
+          onChange={(e) => {
+            setUrlInput(e.target.value)
+            setSaved(false)
+            setKeyRemoved(false)
+          }}
+          placeholder={t('settings.customUrlHint')}
+          className="flex-1 rounded border border-aether-border bg-aether-bg px-3 py-1.5 font-mono text-[13px] text-aether-text outline-none placeholder:text-aether-text-dim focus:border-aether-accent"
+        />
+        <button
+          onClick={() => void save()}
+          disabled={saving}
+          className="rounded bg-aether-accent px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+        >
+          {t('settings.customSave')}
+        </button>
+      </div>
+      <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-aether-text-dim">
+        {t('settings.customKeyWarning')}
+      </p>
+      {host && (
+        <p className="mt-2 max-w-xl text-[12px] text-aether-text">
+          {t('settings.customKeyHost')} <span className="font-mono text-amber-400">{host}</span>
+        </p>
+      )}
+      {saved && !error && (
+        <p className="mt-2 text-xs text-emerald-400">{t('settings.customUrlSaved')}</p>
+      )}
+      {keyRemoved && (
+        <p className="mt-2 text-xs text-amber-400">{t('settings.customKeyRemoved')}</p>
+      )}
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+    </section>
+  )
+}
+
 function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const modelByProvider = useSettingsStore((s) => s.modelByProvider)
   const keyConfigured = useSettingsStore((s) => s.keyConfigured)
@@ -202,8 +283,13 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
     <div className="flex-1 overflow-y-auto p-6">
       <div>
         <h2 className="text-sm font-semibold text-aether-text">{provider.name}</h2>
-        <p className="mt-1 font-mono text-xs text-aether-text-dim">{provider.baseUrl}</p>
+        <p className="mt-1 font-mono text-xs text-aether-text-dim">
+          {provider.baseUrl || t('settings.customNoUrl')}
+        </p>
       </div>
+
+      {/* Proveedor personalizado: la URL base se guarda y valida en Rust */}
+      {provider.id === 'custom' && <CustomBaseUrlSection savedUrl={provider.baseUrl} />}
 
       <section className="mt-6">
         <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">

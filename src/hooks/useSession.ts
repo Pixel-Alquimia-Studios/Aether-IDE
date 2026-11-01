@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 
 import { loadSession, readDir, saveSession, setWorkspace, watchWorkspace } from '@/lib/workspace/fs'
 import { loadChat } from '@/lib/ai/chats'
+import { saveCustomBaseUrl } from '@/lib/ai/api'
 import { useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -33,6 +34,9 @@ function buildSession(): SessionData {
     autoSave: ui.autoSave,
     agentMode: useAgentStore.getState().mode,
     panelVisible: ui.panelVisible,
+    // URL del proveedor personalizado (vive en providers tras loadProviders)
+    customBaseUrl:
+      useSettingsStore.getState().providers.find((p) => p.id === 'custom')?.baseUrl || null,
   }
 }
 
@@ -68,6 +72,11 @@ export function useSession(): void {
             : state.modelByProvider,
           fetchedModels: session.fetchedModels ?? state.fetchedModels,
         }))
+      }
+      // Restaurar la URL del proveedor personalizado (re-valida en Rust;
+      // con restore=true NO invalida la key guardada de la sesión anterior)
+      if (session.customBaseUrl) {
+        await saveCustomBaseUrl(session.customBaseUrl, true).catch(() => undefined)
       }
       // Al iniciar: cargar catálogo y auto-fetch de modelos en segundo plano
       void useSettingsStore.getState().loadProviders()

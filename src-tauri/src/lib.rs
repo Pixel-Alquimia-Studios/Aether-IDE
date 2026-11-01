@@ -44,6 +44,8 @@ pub fn run() {
             commands::show_window,
             commands::exit_app,
             commands_ai::list_providers,
+    commands_ai::set_custom_base_url,
+    commands_ai::get_custom_base_url,
             commands_ai::has_api_key,
             commands_ai::set_api_key,
             commands_ai::delete_api_key,

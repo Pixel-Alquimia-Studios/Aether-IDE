@@ -5,7 +5,7 @@ use std::sync::{Mutex, OnceLock};
 use tauri::ipc::Channel;
 
 use crate::ai::{
-    extract_sse_data_lines, http_client, notify_usage_retry, send_with_retries, strip_code_fences,
+    extract_sse_data_lines, notify_usage_retry, send_with_retries, strip_code_fences,
     truncate_chars_end, truncate_chars_start, ChatMessage, CompletionRequest, ModelInfo, Provider,
     ProviderInfo, StreamChunk, StreamUsage, ThinkingLevel, ToolCall, ToolDef, ToolResponse,
 };
@@ -87,7 +87,8 @@ impl Provider for OpenAiCompatibleProvider {
 
     async fn fetch_models(&self, api_key: Option<String>) -> Result<Vec<ModelInfo>, String> {
         let url = format!("{}/models", self.info.base_url);
-        let mut request = http_client().get(&url);
+        let client = crate::ai::custom::client_for(&self.info.id);
+        let mut request = client.get(&url);
         if let Some(key) = api_key {
             request = request.bearer_auth(key);
         }
@@ -147,7 +148,8 @@ impl Provider for OpenAiCompatibleProvider {
             }
         }
 
-        let mut request = http_client().post(&url).json(&body);
+        let client = crate::ai::custom::client_for(&self.info.id);
+        let mut request = client.post(&url).json(&body);
         if let Some(key) = api_key.as_ref() {
             request = request.bearer_auth(key);
         }
@@ -164,7 +166,7 @@ impl Provider for OpenAiCompatibleProvider {
                 body.as_object_mut()
                     .expect("body de chat es un objeto")
                     .remove("stream_options");
-                let mut retry_req = http_client().post(&url).json(&body);
+                let mut retry_req = client.post(&url).json(&body);
                 if let Some(key) = api_key {
                     retry_req = retry_req.bearer_auth(key);
                 }
@@ -274,7 +276,8 @@ impl Provider for OpenAiCompatibleProvider {
         let mut body = build_completion_body(model, &user);
         // omit_params (p. ej. Moonshot: muestreo fijo en kimi-k2)
         apply_omit_params(&mut body, self.info.omit_params.as_ref());
-        let mut req = http_client().post(&url).json(&body);
+        let client = crate::ai::custom::client_for(&self.info.id);
+        let mut req = client.post(&url).json(&body);
         if let Some(key) = api_key {
             req = req.bearer_auth(key);
         }
@@ -330,7 +333,8 @@ impl Provider for OpenAiCompatibleProvider {
             }
         }
 
-        let mut request = http_client().post(&url).json(&body);
+        let client = crate::ai::custom::client_for(&self.info.id);
+        let mut request = client.post(&url).json(&body);
         if let Some(key) = api_key {
             request = request.bearer_auth(key);
         }

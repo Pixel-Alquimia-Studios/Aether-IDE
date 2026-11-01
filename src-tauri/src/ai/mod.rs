@@ -1,4 +1,5 @@
 pub mod anthropic;
+pub mod custom;
 pub mod gemini;
 pub mod ollama;
 pub mod openai_compatible;
@@ -656,6 +657,25 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
 
 /// Registro de proveedores: resuelve la implementación para un id
 pub fn get_provider(id: &str) -> Result<Box<dyn Provider>, String> {
+    // Proveedor personalizado: la URL vive en Rust y se re-valida AL USAR
+    if id == "custom" {
+        let saved = custom::current_base_url().ok_or_else(|| {
+            "Configura primero la URL base del proveedor personalizado en Ajustes".to_string()
+        })?;
+        let base_url = custom::validate_custom_base_url(&saved)?;
+        return Ok(Box::new(openai_compatible::OpenAiCompatibleProvider {
+            info: ProviderInfo {
+                id: "custom".into(),
+                name: "Proveedor personalizado".into(),
+                kind: "cloud".into(),
+                requires_key: true,
+                base_url,
+                chat_path: "/chat/completions".into(),
+                default_models: vec![],
+                omit_params: None,
+            },
+        }));
+    }
     if let Some(info) = openai_compatible_presets().into_iter().find(|p| p.id == id) {
         return Ok(Box::new(openai_compatible::OpenAiCompatibleProvider { info }));
     }
@@ -673,6 +693,17 @@ pub fn list_providers() -> Vec<ProviderInfo> {
     all.push(AnthropicProvider.info());
     all.push(GeminiProvider.info());
     all.push(OllamaProvider.info());
+    // Personalizado AL FINAL: nunca puede quedar preseleccionado
+    all.push(ProviderInfo {
+        id: "custom".into(),
+        name: "Proveedor personalizado".into(),
+        kind: "cloud".into(),
+        requires_key: true,
+        base_url: custom::current_base_url().unwrap_or_default(),
+        chat_path: "/chat/completions".into(),
+        default_models: vec![],
+        omit_params: None,
+    });
     all
 }
 

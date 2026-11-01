@@ -17,4 +17,6 @@ export interface SessionData {
   agentMode: string | null
   /** Terminal abierta al cerrar (Parte 3: spawn diferido de la PTY) */
   panelVisible?: boolean
+  /** URL base del proveedor personalizado (se re-valida en Rust al usar) */
+  customBaseUrl?: string | null
 }

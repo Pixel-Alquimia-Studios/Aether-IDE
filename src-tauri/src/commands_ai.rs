@@ -61,6 +61,40 @@ pub fn delete_api_key(provider_id: String) -> Result<(), String> {
     secrets::delete_key(&provider_id)
 }
 
+/// Guarda la URL base del proveedor personalizado (validada aquí en Rust).
+/// La key queda ligada a host:puerto: si cambia, se borra del keychain y el
+/// frontend debe volver a pedirla (devuelve true). EXCEPCIÓN: `restore=true`
+/// con memoria vacía (arranque desde session.json) NO toca la key — es la
+/// misma URL guardada la sesión anterior. `url=None` limpia todo.
+#[tauri::command]
+pub fn set_custom_base_url(url: Option<String>, restore: Option<bool>) -> Result<bool, String> {
+    let Some(url) = url else {
+        // Limpiar configuración: borra también la key
+        crate::ai::custom::store_base_url(None);
+        let _ = secrets::delete_key("custom");
+        return Ok(true);
+    };
+    let normalized = crate::ai::custom::validate_custom_base_url(&url)?;
+    let previous = crate::ai::custom::current_base_url();
+    let key_removed = if restore.unwrap_or(false) && previous.is_none() {
+        // Restauración en arranque: la key del keychain corresponde a esta
+        // misma URL guardada en session.json — no se invalida
+        false
+    } else {
+        crate::ai::custom::host_changed(previous.as_deref(), &normalized)
+    };
+    if key_removed {
+        let _ = secrets::delete_key("custom");
+    }
+    crate::ai::custom::store_base_url(Some(normalized));
+    Ok(key_removed)
+}
+
+#[tauri::command]
+pub fn get_custom_base_url() -> Option<String> {
+    crate::ai::custom::current_base_url()
+}
+
 #[tauri::command]
 pub async fn fetch_models(provider_id: String) -> Result<Vec<ModelInfo>, String> {
     let provider = get_provider(&provider_id)?;

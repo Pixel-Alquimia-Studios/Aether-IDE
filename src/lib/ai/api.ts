@@ -82,6 +82,26 @@ export async function deleteApiKey(providerId: string): Promise<void> {
   }
 }
 
+/**
+ * Guarda la URL base del proveedor personalizado. La valida y guarda RUST
+ * (el frontend no la envía en cada llamada). Devuelve si la key quedó
+ * invalidada (cambio de host:puerto) para volver a pedirla.
+ * `restore=true` al arrancar desde session.json: no invalida la key.
+ */
+export async function saveCustomBaseUrl(url: string | null, restore = false): Promise<boolean> {
+  if (isTauri()) {
+    return invokeWithRetry<boolean>('set_custom_base_url', { url, restore })
+  }
+  return false
+}
+
+export async function getCustomBaseUrl(): Promise<string | null> {
+  if (isTauri()) {
+    return invokeWithRetry<string | null>('get_custom_base_url')
+  }
+  return null
+}
+
 export async function fetchModels(providerId: string): Promise<ModelInfo[]> {
   if (isTauri()) {
     return invokeWithRetry<ModelInfo[]>('fetch_models', { providerId })

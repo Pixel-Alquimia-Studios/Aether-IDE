@@ -559,6 +559,9 @@ pub struct SessionData {
     /// Terminal abierta al cerrar (Parte 3: spawn diferido de la PTY)
     #[serde(default)]
     pub panel_visible: bool,
+    /// URL base del proveedor personalizado (se re-valida en Rust al usar)
+    #[serde(default)]
+    pub custom_base_url: Option<String>,
 }
 
 #[tauri::command]
