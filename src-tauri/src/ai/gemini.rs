@@ -54,6 +54,7 @@ impl Provider for GeminiProvider {
                 let id = name.strip_prefix("models/")?;
                 Some(ModelInfo {
                     id: id.to_string(),
+                    name: None,
                     max_context_tokens: m["inputTokenLimit"].as_u64(),
                     modalities: vec!["text".into(), "image".into()],
                 })

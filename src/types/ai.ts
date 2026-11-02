@@ -2,6 +2,8 @@ export type ThinkingLevel = 'low' | 'medium' | 'high' | 'max'
 
 export interface ModelInfo {
   id: string
+  /** Nombre legible del catálogo del proveedor (opcional; p. ej. OpenRouter) */
+  name?: string
   maxContextTokens: number | null
   modalities: string[]
 }

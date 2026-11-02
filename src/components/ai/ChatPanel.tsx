@@ -688,6 +688,17 @@ export function ChatPanel() {
         )}
         {error && <p className="text-center text-[11px] text-red-400">{error}</p>}
         {agentError && <p className="text-center text-[11px] text-red-400">{agentError}</p>}
+        {/* Moonshot 401/403: la key probablemente es de la plataforma china */}
+        {(() => {
+          const err = error ?? agentError
+          if (!err || selected?.id !== 'moonshot') return null
+          if (!/HTTP 40[13]/.test(err)) return null
+          return (
+            <p className="text-center text-[11px] text-amber-400">
+              {t('chat.moonshotChinaHint')}
+            </p>
+          )
+        })()}
         <div ref={messagesEndRef} />
       </div>
 

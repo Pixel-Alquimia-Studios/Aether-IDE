@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { useT } from '@/lib/i18n'
 import { saveCustomBaseUrl } from '@/lib/ai/api'
+import { filterModels } from '@/lib/ai/modelFilter'
 import { getPermissions, setPermissions } from '@/lib/agent/permissions'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -275,6 +276,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
     : provider.defaultModels
   const isFetching = fetchingModels[provider.id] ?? false
   const [apiKeyInput, setApiKeyInput] = useState('')
+  // Filtro de texto sobre el catálogo (id y nombre del modelo)
+  const [modelFilter, setModelFilter] = useState('')
+  const filteredModels = filterModels(models, modelFilter)
 
   const effectiveModel = model || models[0]?.id || provider.defaultModels[0]?.id
   const modelInfo = models.find((m) => m.id === effectiveModel) ?? models[0]
@@ -296,6 +300,15 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
           {t('settings.activeModel')}
         </label>
         <div className="mt-2 flex flex-col gap-2">
+          {/* Filtro del catálogo: útil con catálogos grandes (OpenRouter 300+) */}
+          {models.length > 0 && (
+            <input
+              value={modelFilter}
+              onChange={(e) => setModelFilter(e.target.value)}
+              placeholder={t('settings.modelFilter')}
+              className="w-80 rounded border border-aether-border bg-aether-bg px-3 py-1.5 text-[13px] text-aether-text outline-none placeholder:text-aether-text-dim focus:border-aether-accent"
+            />
+          )}
           <select
             value={models.some((m) => m.id === effectiveModel) ? effectiveModel : ''}
             onChange={(e) => setModel(provider.id, e.target.value)}
@@ -304,12 +317,24 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
             <option value="" disabled>
               {t('settings.pickModel')}
             </option>
-            {models.map((m) => (
+            {filteredModels.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.id}
+                {m.name ? ` — ${m.name}` : ''}
               </option>
             ))}
           </select>
+          {models.length > 0 && filteredModels.length === 0 && (
+            <p className="text-xs text-amber-400">
+              {t('settings.modelFilterEmpty').replace('{query}', modelFilter.trim())}
+            </p>
+          )}
+          {/* Z.ai sin catálogo verificable: el id se escribe a mano */}
+          {provider.id === 'zai' && models.length === 0 && (
+            <p className="max-w-xl text-[11px] leading-relaxed text-aether-text-dim">
+              {t('settings.zaiManualHint')}
+            </p>
+          )}
           <div className="flex gap-2">
             <input
               value={modelByProvider[provider.id] ?? ''}

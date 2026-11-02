@@ -58,15 +58,11 @@ export const MOCK_PROVIDERS: ProviderInfo[] = [
   ]},
   { id: 'lm-studio', name: 'LM Studio (local)', kind: 'local', requiresKey: false, baseUrl: 'http://localhost:1234/v1', defaultModels: [] },
   { id: 'openrouter', name: 'OpenRouter', kind: 'cloud', requiresKey: true, baseUrl: 'https://openrouter.ai/api/v1', defaultModels: [
-    { id: 'openai/gpt-4o', maxContextTokens: 128000, modalities: ['text', 'image'] },
-    { id: 'anthropic/claude-3.5-sonnet', maxContextTokens: 200000, modalities: ['text'] },
-    { id: 'meta-llama/llama-3.3-70b-instruct', maxContextTokens: 131072, modalities: ['text'] },
+    { id: 'openai/gpt-4o', name: 'OpenAI: GPT-4o', maxContextTokens: 128000, modalities: ['text', 'image'] },
+    { id: 'anthropic/claude-3.5-sonnet', name: 'Anthropic: Claude 3.5 Sonnet', maxContextTokens: 200000, modalities: ['text'] },
+    { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Meta: Llama 3.3 70B Instruct', maxContextTokens: 131072, modalities: ['text'] },
   ]},
-  { id: 'zai', name: 'Z.ai (GLM)', kind: 'cloud', requiresKey: true, baseUrl: 'https://api.z.ai/api/paas/v4', defaultModels: [
-    { id: 'glm-4-plus', maxContextTokens: 128000, modalities: ['text'] },
-    { id: 'glm-4-flash', maxContextTokens: 128000, modalities: ['text'] },
-    { id: 'glm-4-long', maxContextTokens: 1000000, modalities: ['text'] },
-  ]},
+  { id: 'zai', name: 'Z.ai (GLM)', kind: 'cloud', requiresKey: true, baseUrl: 'https://api.z.ai/api/paas/v4', defaultModels: [] },
   { id: 'cerebras', name: 'Cerebras', kind: 'cloud', requiresKey: true, baseUrl: 'https://api.cerebras.ai/v1', defaultModels: [
     { id: 'llama-3.3-70b', maxContextTokens: 128000, modalities: ['text'] },
     { id: 'llama3.1-8b', maxContextTokens: 128000, modalities: ['text'] },

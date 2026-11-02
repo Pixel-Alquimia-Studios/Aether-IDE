@@ -110,12 +110,15 @@ impl Provider for OpenAiCompatibleProvider {
             .iter()
             .filter_map(|m| {
                 let id = m["id"].as_str()?;
+                // Nombre legible del catálogo (p. ej. OpenRouter: "OpenAI: GPT-4o")
+                let name = m["name"].as_str().map(|s| s.to_string());
                 // Algunas APIs incluyen contexto en el listado (p. ej. Groq: context_window)
                 let max_context_tokens = m["context_window"]
                     .as_u64()
                     .or_else(|| m["max_context_tokens"].as_u64());
                 Some(ModelInfo {
                     id: id.to_string(),
+                    name,
                     max_context_tokens,
                     modalities: vec!["text".into()],
                 })

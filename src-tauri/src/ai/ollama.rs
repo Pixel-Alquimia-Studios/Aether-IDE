@@ -51,6 +51,7 @@ impl Provider for OllamaProvider {
                 let name = m["name"].as_str()?;
                 Some(ModelInfo {
                     id: name.to_string(),
+                    name: None,
                     max_context_tokens: m["context_length"].as_u64(),
                     modalities: vec!["text".into()],
                 })

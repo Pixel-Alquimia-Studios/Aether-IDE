@@ -185,6 +185,14 @@ const en = {
   'settings.customUrlSaved': 'URL saved.',
   'settings.customKeyRemoved':
     'The server changed — the saved API key was deleted. Enter it again.',
+  // Filtro del catálogo de modelos (Lote F)
+  'settings.modelFilter': 'Filter by model id or name…',
+  'settings.modelFilterEmpty': 'No models match "{query}".',
+  'settings.zaiManualHint':
+    'Z.ai does not publish a public model catalog that could be verified. Enter the model ID manually as shown in your Z.ai console (e.g. the glm model for your plan).',
+  // Sugerencia de clave china de Moonshot ante 401/403
+  'chat.moonshotChinaHint':
+    'If your key is from the Chinese platform (Moonshot China), use the custom provider with https://api.moonshot.cn/v1',
   // Terms (Fase F: legal)
   'terms.dialogTitle': 'Terms of Service and Privacy Policy',
   'terms.summary':
@@ -387,6 +395,14 @@ const es: Record<TranslationKey, string> = {
   'settings.customUrlSaved': 'URL guardada.',
   'settings.customKeyRemoved':
     'El servidor cambió — la API key guardada se borró. Introdúcela de nuevo.',
+  // Filtro del catálogo de modelos (Lote F)
+  'settings.modelFilter': 'Filtrar por id o nombre del modelo…',
+  'settings.modelFilterEmpty': 'Ningún modelo coincide con "{query}".',
+  'settings.zaiManualHint':
+    'Z.ai no publica un catálogo de modelos verificable. Escribe el ID del modelo a mano como aparezca en tu consola de Z.ai (p. ej. el modelo glm de tu plan).',
+  // Sugerencia de clave china de Moonshot ante 401/403
+  'chat.moonshotChinaHint':
+    'Si tu key es de la plataforma china (Moonshot China), usa el proveedor personalizado con https://api.moonshot.cn/v1',
   // Terms (Fase F: legal)
   'terms.dialogTitle': 'Términos del Servicio y Política de Privacidad',
   'terms.summary':

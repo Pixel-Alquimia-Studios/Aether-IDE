@@ -34,6 +34,9 @@ pub struct ProviderInfo {
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
     pub id: String,
+    /// Nombre legible del catálogo del proveedor (opcional; p. ej. OpenRouter)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub max_context_tokens: Option<u64>,
     pub modalities: Vec<String>,
 }
@@ -42,6 +45,7 @@ impl ModelInfo {
     pub fn text(id: &str) -> Self {
         Self {
             id: id.into(),
+            name: None,
             max_context_tokens: None,
             modalities: vec!["text".into()],
         }
@@ -50,6 +54,7 @@ impl ModelInfo {
     pub fn with_context(id: &str, tokens: u64) -> Self {
         Self {
             id: id.into(),
+            name: None,
             max_context_tokens: Some(tokens),
             modalities: vec!["text".into()],
         }
@@ -61,6 +66,7 @@ impl ModelInfo {
         modalities.extend(extra.iter().map(|m| m.to_string()));
         Self {
             id: id.into(),
+            name: None,
             max_context_tokens: Some(tokens),
             modalities,
         }
@@ -604,11 +610,11 @@ pub fn openai_compatible_presets() -> Vec<ProviderInfo> {
             requires_key: true,
             base_url: "https://api.z.ai/api/paas/v4".into(),
             chat_path: "/chat/completions".into(),
-            default_models: vec![
-                ModelInfo::with_context("glm-4-plus", 128_000),
-                ModelInfo::with_context("glm-4-flash", 128_000),
-                ModelInfo::with_context("glm-4-long", 1_000_000),
-            ],
+            // SIN catálogo estático: los ids de modelos de Z.ai no pudieron
+            // verificarse en su documentación oficial — el usuario escribe el
+            // id a mano (hint en Settings) o refresca si el proveedor publica
+            // GET /models
+            default_models: vec![],
             omit_params: None,
         },
         ProviderInfo {
