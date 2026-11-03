@@ -1,9 +1,18 @@
 import { isTauri } from '@tauri-apps/api/core'
 import { create } from 'zustand'
 
-import { deleteApiKey, fetchModels, hasApiKey, listProviders, saveApiKey } from '@/lib/ai/api'
+import {
+  deleteApiKey,
+  fetchModels,
+  getApiKeyStatuses,
+  listProviders,
+  saveApiKey,
+  validateApiKey,
+} from '@/lib/ai/api'
 import { detectLanguage, type Language } from '@/lib/language'
-import type { ModelInfo, ProviderInfo } from '@/types/ai'
+import { tSync } from '@/lib/i18n'
+import { createValidationTracker } from '@/lib/ai/validationToken'
+import type { ApiKeyStatus, KeyValidation, ModelInfo, ProviderInfo } from '@/types/ai'
 
 // Persistencia local de modelos obtenidos (dev en navegador; en desktop la
 // sesión de Tauri guarda fetchedModels en session.json)
@@ -58,6 +67,13 @@ interface SettingsState {
   modelByProvider: Record<string, string>
   /** Qué proveedores tienen API key configurada en el keychain del SO */
   keyConfigured: Record<string, boolean>
+  /** Estado de las keys (configured + hint últimos 4, calculado en Rust).
+   *  SOLO en memoria: nunca en session.json, localStorage ni logs */
+  keyStatuses: Record<string, ApiKeyStatus>
+  /** Resultado de la validación de la key (tras guardar o Reintentar) */
+  keyValidation: Record<string, KeyValidation>
+  /** Validación en vuelo por proveedor (spinner del badge) */
+  keyChecking: Record<string, boolean>
   /** Modelos obtenidos dinámicamente (fetch dinámico) */
   fetchedModels: Record<string, ModelInfo[]>
   fetchingModels: Record<string, boolean>
@@ -72,7 +88,15 @@ interface SettingsState {
   saveKey: (providerId: string, key: string) => Promise<void>
   deleteKey: (providerId: string) => Promise<void>
   fetchModels: (providerId: string) => Promise<void>
+  /** Valida la key en segundo plano (tras guardar o Reintentar) */
+  validateKey: (providerId: string) => Promise<void>
+  /** Descarta una validación en vuelo (carrera: reemplazo/borrado/cambio) */
+  discardValidation: (providerId: string) => void
 }
+
+// Tokens de carrera: el resultado de una validación solo se aplica si su
+// token sigue vigente (reemplazo/borrado/cambio de proveedor lo descartan)
+const validationTracker = createValidationTracker()
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   providers: [],
@@ -81,6 +105,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   selectedProviderId: null,
   modelByProvider: {},
   keyConfigured: {},
+  keyStatuses: {},
+  keyValidation: {},
+  keyChecking: {},
   fetchedModels: loadPersistedFetchedModels(),
   fetchingModels: {},
   fetchModelsError: {},
@@ -95,24 +122,37 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ loading: true, error: null })
     try {
       const providers = await listProviders()
+      // Estados de keys en UNA llamada (un acceso al keychain por proveedor
+      // dentro de Rust). Si el keychain falla: UN único error i18n
+      const keyStatuses = await getApiKeyStatuses()
       const keyConfigured: Record<string, boolean> = {}
       for (const provider of providers) {
         if (provider.requiresKey) {
-          keyConfigured[provider.id] = await hasApiKey(provider.id)
+          keyConfigured[provider.id] = keyStatuses[provider.id]?.configured ?? false
         }
       }
-      set({ providers, keyConfigured, loading: false })
+      set({ providers, keyStatuses, keyConfigured, loading: false })
       // Auto-fetch de modelos del proveedor seleccionado si tiene key configurada
       const { selectedProviderId } = get()
       if (selectedProviderId && keyConfigured[selectedProviderId]) {
         void get().fetchModels(selectedProviderId)
       }
     } catch (e) {
-      set({ loading: false, error: e instanceof Error ? e.message : String(e) })
+      const message = e instanceof Error ? e.message : String(e)
+      // keychain-blocked: → mensaje claro i18n en vez del detalle interno
+      set({
+        loading: false,
+        error: message.startsWith('keychain-blocked:')
+          ? tSync('settings.keychainError')
+          : message,
+      })
     }
   },
 
   selectProvider: (id) => {
+    // Cambiar de proveedor descarta la validación en vuelo del anterior
+    const prev = get().selectedProviderId
+    if (prev && prev !== id) get().discardValidation(prev)
     set({ selectedProviderId: id })
     // Auto-fetch en segundo plano al cambiar de proveedor
     if (get().keyConfigured[id]) {
@@ -128,26 +168,53 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   saveKey: async (providerId, key) => {
     try {
       await saveApiKey(providerId, key)
-      set((state) => ({
-        keyConfigured: { ...state.keyConfigured, [providerId]: true },
-        error: null,
-      }))
+      // Reemplazar = guardar de nuevo: descarta cualquier validación en vuelo
+      get().discardValidation(providerId)
+      // Refresca estados (configured + hint) desde Rust con la key nueva
+      try {
+        const keyStatuses = await getApiKeyStatuses()
+        set((state) => ({
+          keyStatuses,
+          keyConfigured: {
+            ...state.keyConfigured,
+            [providerId]: keyStatuses[providerId]?.configured ?? true,
+          },
+          error: null,
+        }))
+      } catch (e) {
+        // keychain bloqueado al re-leer: el guardado SÍ ocurrió
+        set((state) => ({
+          keyConfigured: { ...state.keyConfigured, [providerId]: true },
+          error: e instanceof Error ? e.message : String(e),
+        }))
+      }
+      // Validación en segundo plano: NO bloquea el guardado
+      void get().validateKey(providerId)
       // Al configurar la clave, traer los modelos automáticamente
       void get().fetchModels(providerId)
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) })
+      const message = e instanceof Error ? e.message : String(e)
+      set({
+        error: message.startsWith('keychain-blocked:') ? tSync('settings.keychainError') : message,
+      })
     }
   },
 
   deleteKey: async (providerId) => {
     try {
       await deleteApiKey(providerId)
+      // Borrar descarta la validación en vuelo y limpia hint + estado
+      get().discardValidation(providerId)
       set((state) => ({
         keyConfigured: { ...state.keyConfigured, [providerId]: false },
+        keyStatuses: { ...state.keyStatuses, [providerId]: { configured: false, hint: null } },
         error: null,
       }))
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) })
+      const message = e instanceof Error ? e.message : String(e)
+      set({
+        error: message.startsWith('keychain-blocked:') ? tSync('settings.keychainError') : message,
+      })
     }
   },
 
@@ -174,6 +241,43 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         },
       }))
     }
+  },
+
+  validateKey: async (providerId) => {
+    const token = validationTracker.start(providerId)
+    set((state) => ({
+      keyChecking: { ...state.keyChecking, [providerId]: true },
+    }))
+    try {
+      const result = await validateApiKey(providerId)
+      // Carrera: si reemplazaron/borraron la key o cambió el foco, se descarta
+      if (!validationTracker.isValid(providerId, token)) return
+      set((state) => ({
+        keyValidation: { ...state.keyValidation, [providerId]: result },
+        keyChecking: { ...state.keyChecking, [providerId]: false },
+      }))
+    } catch {
+      // Error de transporte del propio invoke: no verificable (sin detalle)
+      if (!validationTracker.isValid(providerId, token)) return
+      set((state) => ({
+        keyValidation: {
+          ...state.keyValidation,
+          [providerId]: { estado: 'unverifiable', httpStatus: null, motivo: 'noNetwork' },
+        },
+        keyChecking: { ...state.keyChecking, [providerId]: false },
+      }))
+    }
+  },
+
+  discardValidation: (providerId) => {
+    validationTracker.discard(providerId)
+    set((state) => {
+      const { [providerId]: _drop, ...restValidation } = state.keyValidation
+      return {
+        keyChecking: { ...state.keyChecking, [providerId]: false },
+        keyValidation: restValidation,
+      }
+    })
   },
 }))
 

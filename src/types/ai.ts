@@ -1,5 +1,35 @@
 export type ThinkingLevel = 'low' | 'medium' | 'high' | 'max'
 
+/** Estado de una key que el frontend puede conocer (la key nunca sale del keychain) */
+export interface ApiKeyStatus {
+  configured: boolean
+  /** Últimos 4 caracteres, calculados en Rust, solo si la key tiene >= 12 */
+  hint: string | null
+}
+
+export type KeyValidationState = 'valid' | 'rejected' | 'unverifiable'
+
+export type KeyValidationReason =
+  | 'ok'
+  | 'auth'
+  | 'rateLimit'
+  | 'serverError'
+  | 'timeout'
+  | 'noNetwork'
+  | 'noModelsEndpoint'
+  | 'unexpectedStatus'
+  | 'redirect'
+  | 'noKey'
+  | 'noUrl'
+  | 'noAuthenticatedCheck'
+
+/** Resultado de validar una key: SOLO estado/motivo, nunca texto del cuerpo */
+export interface KeyValidation {
+  estado: KeyValidationState
+  httpStatus?: number | null
+  motivo: KeyValidationReason
+}
+
 export interface ModelInfo {
   id: string
   /** Nombre legible del catálogo del proveedor (opcional; p. ej. OpenRouter) */

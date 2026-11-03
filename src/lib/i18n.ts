@@ -193,6 +193,32 @@ const en = {
   // Sugerencia de clave china de Moonshot ante 401/403
   'chat.moonshotChinaHint':
     'If your key is from the Chinese platform (Moonshot China), use the custom provider with https://api.moonshot.cn/v1',
+  // Guardado y validación de API keys (Lote F)
+  'chat.authRejected':
+    'Provider {nombre} rejected authentication (HTTP {codigo}). Check your API key and the model permissions.',
+  'chat.openSettings': 'Open Settings',
+  'settings.keychainError': 'Could not access the OS keychain',
+  'settings.keyChecking': 'Checking…',
+  'settings.keyRejected': 'Rejected by the provider',
+  'settings.keyUnverifiable': 'Could not be verified',
+  'settings.keyValidated': 'Configured and verified',
+  'settings.keyRetry': 'Retry',
+  'settings.deleteConfirm': 'Delete key?',
+  'settings.deleteYes': 'Yes, delete',
+  'settings.deleteNo': 'Cancel',
+  'settings.customDeleteWarning':
+    'Deleting the key breaks the host binding; when you enter it again it will bind to the current host.',
+  'settings.reason.auth': 'authentication rejected',
+  'settings.reason.rateLimit': 'rate limited, try again later',
+  'settings.reason.serverError': 'provider server error',
+  'settings.reason.timeout': 'the provider did not respond in time',
+  'settings.reason.noNetwork': 'no connection to the provider',
+  'settings.reason.noModelsEndpoint': 'this provider has no model catalog to check against',
+  'settings.reason.unexpectedStatus': 'unexpected provider response',
+  'settings.reason.redirect': 'the provider redirected the request (not followed)',
+  'settings.reason.noKey': 'no key configured',
+  'settings.reason.noUrl': 'base URL not configured yet',
+  'settings.reason.noAuthenticatedCheck': 'no authenticated endpoint available to verify this key',
   // Terms (Fase F: legal)
   'terms.dialogTitle': 'Terms of Service and Privacy Policy',
   'terms.summary':
@@ -403,6 +429,32 @@ const es: Record<TranslationKey, string> = {
   // Sugerencia de clave china de Moonshot ante 401/403
   'chat.moonshotChinaHint':
     'Si tu key es de la plataforma china (Moonshot China), usa el proveedor personalizado con https://api.moonshot.cn/v1',
+  // Guardado y validación de API keys (Lote F)
+  'chat.authRejected':
+    'El proveedor {nombre} rechazó la autenticación (HTTP {codigo}). Revisa tu API key y los permisos del modelo.',
+  'chat.openSettings': 'Abrir Ajustes',
+  'settings.keychainError': 'No se pudo acceder al keychain del SO',
+  'settings.keyChecking': 'Comprobando…',
+  'settings.keyRejected': 'Rechazada por el proveedor',
+  'settings.keyUnverifiable': 'No se pudo verificar',
+  'settings.keyValidated': 'Configurada y verificada',
+  'settings.keyRetry': 'Reintentar',
+  'settings.deleteConfirm': '¿Borrar la key?',
+  'settings.deleteYes': 'Sí, borrar',
+  'settings.deleteNo': 'Cancelar',
+  'settings.customDeleteWarning':
+    'Borrar la key rompe el vínculo con el host; al introducirla de nuevo se vinculará al host actual.',
+  'settings.reason.auth': 'autenticación rechazada',
+  'settings.reason.rateLimit': 'límite de peticiones, prueba más tarde',
+  'settings.reason.serverError': 'error del servidor del proveedor',
+  'settings.reason.timeout': 'el proveedor no respondió a tiempo',
+  'settings.reason.noNetwork': 'sin conexión con el proveedor',
+  'settings.reason.noModelsEndpoint': 'este proveedor no tiene catálogo de modelos contra el que comprobar',
+  'settings.reason.unexpectedStatus': 'respuesta inesperada del proveedor',
+  'settings.reason.redirect': 'el proveedor redirigió la petición (no se siguió)',
+  'settings.reason.noKey': 'sin key configurada',
+  'settings.reason.noUrl': 'URL base sin configurar todavía',
+  'settings.reason.noAuthenticatedCheck': 'no hay endpoint autenticado disponible para verificar esta key',
   // Terms (Fase F: legal)
   'terms.dialogTitle': 'Términos del Servicio y Política de Privacidad',
   'terms.summary':

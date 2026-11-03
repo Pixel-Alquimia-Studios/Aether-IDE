@@ -29,6 +29,14 @@ impl Provider for GeminiProvider {
         }
     }
 
+    async fn validate_key(&self, api_key: &str) -> crate::ai::KeyValidation {
+        // GET /v1beta/models con x-goog-api-key: requiere autenticación real
+        let request = http_client()
+            .get("https://generativelanguage.googleapis.com/v1beta/models")
+            .header("x-goog-api-key", api_key);
+        crate::ai::validate_key_request(request).await
+    }
+
     async fn fetch_models(&self, api_key: Option<String>) -> Result<Vec<ModelInfo>, String> {
         let key = api_key.ok_or_else(|| "API key no configurada".to_string())?;
         let response = http_client()

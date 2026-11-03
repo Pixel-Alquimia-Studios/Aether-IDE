@@ -132,6 +132,7 @@ export function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const t = useT()
   const setChatPanelVisible = useUiStore((s) => s.setChatPanelVisible)
+const openSettingsForProvider = useUiStore((s) => s.openSettingsForProvider)
 
   // Timeline unificado: mensajes del chat + pasos del agente, ordenados por ts
   const timeline = useMemo<TimelineItem[]>(() => {
@@ -688,15 +689,32 @@ export function ChatPanel() {
         )}
         {error && <p className="text-center text-[11px] text-red-400">{error}</p>}
         {agentError && <p className="text-center text-[11px] text-red-400">{agentError}</p>}
-        {/* Moonshot 401/403: la key probablemente es de la plataforma china */}
+        {/* 401/403 del chat: mensaje claro + acceso directo a Ajustes.
+            El estado guardado de la key NO cambia desde el chat */}
         {(() => {
           const err = error ?? agentError
-          if (!err || selected?.id !== 'moonshot') return null
-          if (!/HTTP 40[13]/.test(err)) return null
+          if (!err || !selected) return null
+          const m = /HTTP (40[13])/.exec(err)
+          if (!m) return null
           return (
-            <p className="text-center text-[11px] text-amber-400">
-              {t('chat.moonshotChinaHint')}
-            </p>
+            <div className="mx-auto mt-1 flex max-w-xl flex-col items-center gap-1">
+              <p className="text-center text-[11px] text-amber-400">
+                {t('chat.authRejected')
+                  .replace('{nombre}', selected.name)
+                  .replace('{codigo}', m[1])}
+              </p>
+              <button
+                onClick={() => openSettingsForProvider(selected.id)}
+                className="rounded border border-aether-border px-2 py-0.5 text-[11px] text-aether-text-dim hover:bg-white/5"
+              >
+                {t('chat.openSettings')}
+              </button>
+              {selected.id === 'moonshot' && (
+                <p className="text-center text-[11px] text-amber-400">
+                  {t('chat.moonshotChinaHint')}
+                </p>
+              )}
+            </div>
           )
         })()}
         <div ref={messagesEndRef} />

@@ -30,6 +30,15 @@ impl Provider for AnthropicProvider {
         }
     }
 
+    async fn validate_key(&self, api_key: &str) -> crate::ai::KeyValidation {
+        // GET /v1/models con x-api-key: requiere autenticación real
+        let request = http_client()
+            .get("https://api.anthropic.com/v1/models")
+            .header("x-api-key", api_key)
+            .header("anthropic-version", "2023-06-01");
+        crate::ai::validate_key_request(request).await
+    }
+
     async fn fetch_models(&self, api_key: Option<String>) -> Result<Vec<ModelInfo>, String> {
         let key = api_key.ok_or_else(|| "API key no configurada".to_string())?;
         let response = http_client()

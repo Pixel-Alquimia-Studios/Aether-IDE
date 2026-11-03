@@ -1,4 +1,5 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
+import type { ApiKeyStatus, KeyValidation } from '@/types/ai'
 import type { InvokeArgs } from '@tauri-apps/api/core'
 
 import type { ModelInfo, ProviderInfo, ToolDef, ToolResponse } from '@/types/ai'
@@ -63,11 +64,27 @@ export async function listProviders(): Promise<ProviderInfo[]> {
   return MOCK_PROVIDERS
 }
 
-export async function hasApiKey(providerId: string): Promise<boolean> {
+/**
+ * Estados de TODAS las keys en una llamada (un acceso al keychain por
+ * proveedor dentro de Rust). Si el keychain falla, el error empieza con
+ * "keychain-blocked:" y el store lo traduce con i18n.
+ */
+export async function getApiKeyStatuses(): Promise<Record<string, ApiKeyStatus>> {
   if (isTauri()) {
-    return invokeWithRetry<boolean>('has_api_key', { providerId })
+    return invokeWithRetry<Record<string, ApiKeyStatus>>('api_key_statuses')
   }
-  return false
+  return {}
+}
+
+/**
+ * Valida la key contra el proveedor (llamada de prueba en Rust: timeout 8 s,
+ * sin redirecciones). Devuelve SOLO estado/motivo — nunca texto del cuerpo.
+ */
+export async function validateApiKey(providerId: string): Promise<KeyValidation> {
+  if (isTauri()) {
+    return invokeWithRetry<KeyValidation>('validate_api_key', { providerId })
+  }
+  return { estado: 'unverifiable', httpStatus: null, motivo: 'noNetwork' }
 }
 
 export async function saveApiKey(providerId: string, apiKey: string): Promise<void> {

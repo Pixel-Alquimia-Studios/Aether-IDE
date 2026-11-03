@@ -212,6 +212,67 @@ pub enum StreamChunk {
     Error { message: String },
 }
 
+/// Resultado de validar una API key contra el proveedor. La respuesta lleva
+/// SOLO estado, HTTP opcional y motivo enum: NUNCA texto del cuerpo ni de los
+/// errores (algunos proveedores devuelven la key enmascarada en su cuerpo).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyValidation {
+    /// "valid" | "rejected" | "unverifiable"
+    pub estado: String,
+    pub http_status: Option<u16>,
+    /// ok | auth | rateLimit | serverError | timeout | noNetwork |
+    /// noModelsEndpoint | unexpectedStatus | redirect | noKey | noUrl |
+    /// noAuthenticatedCheck
+    pub motivo: String,
+}
+
+/// Clasifica un HTTP status de la llamada de prueba. SOLO 401/403 son
+/// "rejected": sin red, 429, 5xx y timeouts son "unverifiable" (nunca
+/// se marca una key como inválida por un fallo transitorio)
+pub(crate) fn classify_key_validation_status(status: u16) -> KeyValidation {
+    let (estado, motivo) = match status {
+        200 => ("valid", "ok"),
+        401 | 403 => ("rejected", "auth"),
+        429 => ("unverifiable", "rateLimit"),
+        404 => ("unverifiable", "noModelsEndpoint"),
+        300..=399 => ("unverifiable", "redirect"),
+        500..=599 => ("unverifiable", "serverError"),
+        _ => ("unverifiable", "unexpectedStatus"),
+    };
+    KeyValidation {
+        estado: estado.into(),
+        http_status: Some(status),
+        motivo: motivo.into(),
+    }
+}
+
+/// Clasifica un error de envío (sin red / timeout). El texto del error NO se
+/// incluye en la respuesta (podría contener la URL y datos del entorno)
+pub(crate) fn classify_key_validation_error(err: &str) -> KeyValidation {
+    let lower = err.to_lowercase();
+    let motivo = if lower.contains("timeout") || lower.contains("timed out") {
+        "timeout"
+    } else {
+        "noNetwork"
+    };
+    KeyValidation {
+        estado: "unverifiable".into(),
+        http_status: None,
+        motivo: motivo.into(),
+    }
+}
+
+/// Envía la petición de validación con timeout corto y clasifica el resultado
+pub(crate) async fn validate_key_request(request: reqwest::RequestBuilder) -> KeyValidation {
+    const VALIDATE_TIMEOUT_SECS: u64 = 8;
+    let request = request.timeout(std::time::Duration::from_secs(VALIDATE_TIMEOUT_SECS));
+    match request.send().await {
+        Ok(response) => classify_key_validation_status(response.status().as_u16()),
+        Err(e) => classify_key_validation_error(&e.to_string()),
+    }
+}
+
 #[async_trait::async_trait]
 pub trait Provider: Send + Sync {
     fn info(&self) -> ProviderInfo;
@@ -221,6 +282,16 @@ pub trait Provider: Send + Sync {
     }
 
     async fn fetch_models(&self, api_key: Option<String>) -> Result<Vec<ModelInfo>, String>;
+
+    /// Valida una key con una llamada de prueba (timeout 8 s, sin seguir
+    /// redirecciones). La respuesta SOLO lleva estado/motivo: NUNCA texto del
+    /// cuerpo del proveedor (algunos devuelven la key enmascarada en él).
+    async fn validate_key(&self, api_key: &str) -> KeyValidation {
+        let info = self.info();
+        let url = format!("{}/models", info.base_url);
+        let request = custom::client_for(&info.id).get(&url).bearer_auth(api_key);
+        validate_key_request(request).await
+    }
 
     /// Chat con streaming. Devuelve el uso real de tokens cuando el proveedor
     /// lo entrega (y chars generados como fallback); el chunk Done y las

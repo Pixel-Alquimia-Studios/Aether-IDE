@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { useT } from '@/lib/i18n'
+import { useT, type TranslationKey } from '@/lib/i18n'
 import { saveCustomBaseUrl } from '@/lib/ai/api'
 import { filterModels } from '@/lib/ai/modelFilter'
 import { getPermissions, setPermissions } from '@/lib/agent/permissions'
@@ -27,6 +27,18 @@ type SettingsSection = 'general' | 'providers' | 'permissions'
 export function SettingsView() {
   const [section, setSection] = useState<SettingsSection>('general')
   const t = useT()
+  const settingsFocus = useUiStore((s) => s.settingsFocus)
+  const setSettingsFocus = useUiStore((s) => s.setSettingsFocus)
+  const selectProvider = useSettingsStore((s) => s.selectProvider)
+
+  // Chat 401/403 → botón "Abrir Ajustes": abre la sección de proveedores con
+  // el proveedor afectado seleccionado, y limpia el foco
+  useEffect(() => {
+    if (!settingsFocus) return
+    setSection('providers')
+    selectProvider(settingsFocus)
+    setSettingsFocus(null)
+  }, [settingsFocus, selectProvider, setSettingsFocus])
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -176,6 +188,131 @@ function ProvidersSection() {
   )
 }
 
+/** Badge de estado de la API key: configurada+hint, comprobando, rechazada
+ *  (con Reintentar), no verificable (con motivo breve), no configurada */
+function KeyBadge({ providerId, isConfigured }: { providerId: string; isConfigured: boolean }) {
+  const t = useT()
+  const status = useSettingsStore((s) => s.keyStatuses[providerId])
+  const validation = useSettingsStore((s) => s.keyValidation[providerId])
+  const checking = useSettingsStore((s) => s.keyChecking[providerId] ?? false)
+  const validateKey = useSettingsStore((s) => s.validateKey)
+
+  // Comprobando (validación en vuelo): spinner + texto
+  if (checking) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded bg-aether-accent/15 px-2 py-0.5 text-[11px] text-aether-text-dim">
+        <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-aether-text-dim border-t-transparent" />
+        {t('settings.keyChecking')}
+      </span>
+    )
+  }
+
+  // Validación rechazada: el proveedor devolvió 401/403
+  if (validation?.estado === 'rejected') {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <span className="inline-block rounded bg-red-500/15 px-2 py-0.5 text-[11px] text-red-400">
+          {t('settings.keyRejected')}
+        </span>
+        <button
+          onClick={() => void validateKey(providerId)}
+          className="rounded border border-aether-border px-2 py-0.5 text-[11px] text-aether-text-dim hover:bg-white/5"
+        >
+          {t('settings.keyRetry')}
+        </button>
+      </span>
+    )
+  }
+
+  // No verificable: sin red, sin /models, timeout… (con explicación breve)
+  if (validation?.estado === 'unverifiable' && validation.motivo !== 'noKey') {
+    const reason = t(`settings.reason.${validation.motivo}` as TranslationKey)
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        <span className="inline-block rounded bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-400">
+          {t('settings.keyUnverifiable')}
+          {validation.httpStatus ? ` (HTTP ${validation.httpStatus})` : ''} — {reason}
+        </span>
+        <button
+          onClick={() => void validateKey(providerId)}
+          className="rounded border border-aether-border px-2 py-0.5 text-[11px] text-aether-text-dim hover:bg-white/5"
+        >
+          {t('settings.keyRetry')}
+        </button>
+      </span>
+    )
+  }
+
+  // Configurada (+ hint de últimos 4 si Rust lo calculó, y verificada si aplica)
+  if (isConfigured) {
+    const verified = validation?.estado === 'valid'
+    const withHint = status?.hint ? ` · …${status.hint}` : ''
+    return (
+      <span className="inline-block rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-400">
+        {verified ? t('settings.keyValidated') : t('settings.keyConfigured')}
+        {withHint}
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-block rounded bg-red-500/15 px-2 py-0.5 text-[11px] text-red-400">
+      {t('settings.keyNotConfigured')}
+    </span>
+  )
+}
+
+/** Borrar key con confirmación inline de dos pasos (vuelve a normal tras ~5 s) */
+function DeleteKeyButton({ providerId }: { providerId: string }) {
+  const t = useT()
+  const deleteKey = useSettingsStore((s) => s.deleteKey)
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    if (!confirming) return
+    const timer = window.setTimeout(() => setConfirming(false), 5000)
+    return () => window.clearTimeout(timer)
+  }, [confirming])
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        className="rounded border border-aether-border px-3 py-1.5 text-[13px] text-aether-text-dim hover:bg-white/5"
+      >
+        {t('settings.delete')}
+      </button>
+    )
+  }
+  return (
+    <span className="flex flex-col gap-1">
+      <span className="flex items-center gap-1">
+        <span className="text-[11px] text-amber-400">{t('settings.deleteConfirm')}</span>
+        <button
+          onClick={() => {
+            setConfirming(false)
+            void deleteKey(providerId)
+          }}
+          className="rounded bg-red-500/80 px-2 py-1 text-[11px] font-medium text-white hover:bg-red-500"
+        >
+          {t('settings.deleteYes')}
+        </button>
+        <button
+          onClick={() => setConfirming(false)}
+          className="rounded border border-aether-border px-2 py-1 text-[11px] text-aether-text-dim hover:bg-white/5"
+        >
+          {t('settings.deleteNo')}
+        </button>
+      </span>
+      {providerId === 'custom' && (
+        <span className="max-w-xs text-[10px] leading-snug text-aether-text-dim">
+          {t('settings.customDeleteWarning')}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function CustomBaseUrlSection({ savedUrl }: { savedUrl: string }) {
   const t = useT()
   const [urlInput, setUrlInput] = useState(savedUrl)
@@ -203,7 +340,9 @@ function CustomBaseUrlSection({ savedUrl }: { savedUrl: string }) {
       setSaved(true)
       if (keyWasRemoved) {
         setKeyRemoved(true)
-        // Refresca keyConfigured: el badge pasa a "sin key" para re-pedirla
+        // Cambio de host: la key se borró — descarta validaciones en vuelo
+        // del custom y refresca estados (badge pasa a "sin key")
+        useSettingsStore.getState().discardValidation('custom')
         void loadProviders()
       }
     } catch (e) {
@@ -264,7 +403,6 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const fetchModelsError = useSettingsStore((s) => s.fetchModelsError)
   const setModel = useSettingsStore((s) => s.setModel)
   const saveKey = useSettingsStore((s) => s.saveKey)
-  const deleteKey = useSettingsStore((s) => s.deleteKey)
   const fetchModels = useSettingsStore((s) => s.fetchModels)
   const t = useT()
 
@@ -370,15 +508,8 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
         </label>
         {provider.requiresKey ? (
           <div className="mt-2">
-            <span
-              className={`inline-block rounded px-2 py-0.5 text-[11px] ${
-                isConfigured
-                  ? 'bg-emerald-500/15 text-emerald-400'
-                  : 'bg-red-500/15 text-red-400'
-              }`}
-            >
-              {isConfigured ? t('settings.keyConfigured') : t('settings.keyNotConfigured')}
-            </span>
+            {/* Badge con estados: configurada+hint / comprobando / rechazada / no verificable */}
+            <KeyBadge providerId={provider.id} isConfigured={isConfigured} />
             <div className="mt-3 flex max-w-xl gap-2">
               <input
                 type="password"
@@ -397,14 +528,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
               >
                 {t('settings.save')}
               </button>
-              {isConfigured && (
-                <button
-                  onClick={() => void deleteKey(provider.id)}
-                  className="rounded border border-aether-border px-3 py-1.5 text-[13px] text-aether-text-dim hover:bg-white/5"
-                >
-                  {t('settings.delete')}
-                </button>
-              )}
+              {isConfigured && <DeleteKeyButton providerId={provider.id} />}
             </div>
             <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-aether-text-dim">
               {t('settings.keychainNote')}

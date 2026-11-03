@@ -126,6 +126,25 @@ impl Provider for OpenAiCompatibleProvider {
             .collect())
     }
 
+    async fn validate_key(&self, api_key: &str) -> crate::ai::KeyValidation {
+        // OpenRouter: su GET /models es PÚBLICO (200 sin key) y no valida nada;
+        // el endpoint autenticado de la key es GET /key (documentado en su
+        // OpenAPI como "Get current API key", requiere Bearer, 401 sin auth)
+        if self.info.id == "openrouter" {
+            let url = format!("{}/key", self.info.base_url);
+            let request = crate::ai::custom::client_for(&self.info.id)
+                .get(&url)
+                .bearer_auth(api_key);
+            return crate::ai::validate_key_request(request).await;
+        }
+        // Resto de OpenAI-compatibles: GET /models con Bearer (default)
+        let url = format!("{}/models", self.info.base_url);
+        let request = crate::ai::custom::client_for(&self.info.id)
+            .get(&url)
+            .bearer_auth(api_key);
+        crate::ai::validate_key_request(request).await
+    }
+
     async fn chat_stream(
         &self,
         model: &str,
