@@ -1,12 +1,11 @@
-// Tests de arranque (Parte 3, v0.4.0): scheduler idle con fallback y lógica
-// del spawn diferido de la terminal.
+// Tests de arranque (Parte 3, v0.4.0): scheduler idle con fallback.
 // Ejecución: node scripts/test-startup.mjs
 
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const { scheduleIdle, shouldSpawnTerminal } = await import(
+const { scheduleIdle, panelShouldClose } = await import(
   pathToFileURL(path.join(root, 'src', 'lib', 'startup.ts')).href
 )
 
@@ -19,12 +18,11 @@ function check(name, cond, detail = '') {
   }
 }
 
-console.log('== shouldSpawnTerminal (spawn diferido de la PTY) ==')
-check('panel oculto al montar → NO spawn', shouldSpawnTerminal(false, false) === false)
-check('sesión restaurada con terminal abierta → spawn al montar', shouldSpawnTerminal(true, false) === true)
-check('primer Ctrl+J → spawn', shouldSpawnTerminal(true, false) === true)
-check('ocultar tras crear → NO re-spawn (B4: sobrevive)', shouldSpawnTerminal(false, true) === false)
-check('re-abrir tras crear → NO re-spawn (PTY viva)', shouldSpawnTerminal(true, true) === false)
+console.log('== panelShouldClose (cerrar la última terminal cierra el panel) ==')
+check('1 → 0 cierra', panelShouldClose(1, 0) === true)
+check('2 → 1 NO cierra', panelShouldClose(2, 1) === false)
+check('0 → 1 NO cierra (apertura)', panelShouldClose(0, 1) === false)
+check('0 → 0 NO cierra', panelShouldClose(0, 0) === false)
 
 console.log('== scheduleIdle (fallback sin requestIdleCallback) ==')
 // En Node no existe requestIdleCallback → debe usar el fallback setTimeout

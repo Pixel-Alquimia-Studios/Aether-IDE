@@ -60,9 +60,9 @@ check('SettingsView aviso custom al borrar', settingsView.includes('settings.cus
 // 6. Chat 401/403: mensaje + botón Abrir Ajustes; no cambia el estado de keys
 const chatPanel = read('src/components/ai/ChatPanel.tsx')
 check('ChatPanel mensaje authRejected', chatPanel.includes('chat.authRejected'))
-check('ChatPanel botón Abrir Ajustes', chatPanel.includes('openSettingsForProvider('))
+check('ChatPanel botón Abrir Ajustes abre proveedores', /openSettings\('providers'\)/.test(chatPanel))
 check('ChatPanel conserva hint Moonshot', chatPanel.includes('chat.moonshotChinaHint'))
-check('uiStore acción openSettingsForProvider', read('src/stores/uiStore.ts').includes('openSettingsForProvider'))
+check('uiStore acción openSettings', read('src/stores/uiStore.ts').includes('openSettings'))
 
 // 7. i18n ES/EN con las claves nuevas
 const i18n = read('src/lib/i18n.ts')

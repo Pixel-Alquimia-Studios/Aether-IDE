@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 
 export type SidebarView = 'explorer' | 'search' | 'ai' | 'settings' | 'git' | 'extensions'
+/** Secciones internas del panel de Ajustes (vive aquí para navegación externa) */
+export type SettingsSection = 'general' | 'providers' | 'permissions'
 
 interface UiState {
   activeView: SidebarView
@@ -17,8 +19,8 @@ interface UiState {
   chatPanelVisible: boolean
   /** Diálogo de Términos y Privacidad abierto (reabrible desde Ajustes) */
   termsDialogOpen: boolean
-  /** Proveedor al que navegar al abrir Ajustes (chat 401/403 → botón) */
-  settingsFocus: string | null
+  /** Sección activa de Ajustes (el chat puede abrir Ajustes en proveedores) */
+  settingsSection: SettingsSection
 
   setActiveView: (view: SidebarView) => void
   showView: (view: SidebarView) => void
@@ -32,9 +34,9 @@ interface UiState {
   setOpenMenu: (menu: string | null) => void
   setChatPanelVisible: (open: boolean) => void
   setTermsDialogOpen: (open: boolean) => void
-  /** Abre Ajustes en la sección de proveedores con el proveedor seleccionado */
-  openSettingsForProvider: (providerId: string) => void
-  setSettingsFocus: (focus: string | null) => void
+  /** Abre Ajustes en la sección indicada (botón 401/403 del chat) */
+  openSettings: (section?: SettingsSection) => void
+  setSettingsSection: (section: SettingsSection) => void
 }
 
 export const useUiStore = create<UiState>()((set) => ({
@@ -47,7 +49,7 @@ export const useUiStore = create<UiState>()((set) => ({
   openMenu: null,
   chatPanelVisible: true,
   termsDialogOpen: false,
-  settingsFocus: null,
+  settingsSection: 'general',
 
   // Si se pulsa el icono de la vista ya activa, colapsa la sidebar (comportamiento VS Code)
   setActiveView: (view) =>
@@ -67,7 +69,7 @@ export const useUiStore = create<UiState>()((set) => ({
   setOpenMenu: (menu) => set({ openMenu: menu }),
   setChatPanelVisible: (open) => set({ chatPanelVisible: open }),
   setTermsDialogOpen: (open) => set({ termsDialogOpen: open }),
-  openSettingsForProvider: (providerId) =>
-    set({ activeView: 'settings', sidebarVisible: true, settingsFocus: providerId }),
-  setSettingsFocus: (focus) => set({ settingsFocus: focus }),
+  openSettings: (section) =>
+    set({ activeView: 'settings', sidebarVisible: true, settingsSection: section ?? 'general' }),
+  setSettingsSection: (section) => set({ settingsSection: section }),
 }))

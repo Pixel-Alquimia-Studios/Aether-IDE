@@ -132,7 +132,7 @@ export function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const t = useT()
   const setChatPanelVisible = useUiStore((s) => s.setChatPanelVisible)
-const openSettingsForProvider = useUiStore((s) => s.openSettingsForProvider)
+const openSettings = useUiStore((s) => s.openSettings)
 
   // Timeline unificado: mensajes del chat + pasos del agente, ordenados por ts
   const timeline = useMemo<TimelineItem[]>(() => {
@@ -704,7 +704,10 @@ const openSettingsForProvider = useUiStore((s) => s.openSettingsForProvider)
                   .replace('{codigo}', m[1])}
               </p>
               <button
-                onClick={() => openSettingsForProvider(selected.id)}
+                onClick={() => {
+                  openSettings('providers')
+                  selectProvider(selected.id)
+                }}
                 className="rounded border border-aether-border px-2 py-0.5 text-[11px] text-aether-text-dim hover:bg-white/5"
               >
                 {t('chat.openSettings')}

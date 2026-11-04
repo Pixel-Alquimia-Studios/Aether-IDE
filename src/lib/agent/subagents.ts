@@ -1,5 +1,5 @@
 import { skillsFor } from '@/lib/agent/skills'
-import type { AgentFinding, AgentStep } from '@/types/agent'
+import type { AgentFinding } from '@/types/agent'
 
 import auditbotPrompt from '@/resources/subagents/agents/auditbot.md?raw'
 import bugbotPrompt from '@/resources/subagents/agents/bugbot.md?raw'
@@ -134,7 +134,3 @@ export const SUBAGENT_TOOL_NAMES = new Set([
   'list_directory',
   'design_search',
 ])
-
-export function stepIsReport(step: AgentStep): boolean {
-  return step.type === 'report' && Array.isArray(step.findings)
-}

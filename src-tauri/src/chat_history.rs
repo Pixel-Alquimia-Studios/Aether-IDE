@@ -66,13 +66,6 @@ fn chat_path(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     Ok(chats_dir(app)?.join(format!("{id}.json")))
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
 fn write_chat(path: &PathBuf, chat: &ChatSession) -> Result<(), String> {
     let tmp = path.with_file_name(format!(".{}.tmp", chat.id));
     let raw = serde_json::to_string_pretty(chat)
@@ -83,12 +76,6 @@ fn write_chat(path: &PathBuf, chat: &ChatSession) -> Result<(), String> {
         return Err(format!("No se pudo guardar el chat: {e}"));
     }
     Ok(())
-}
-
-#[tauri::command]
-pub fn create_chat(app: AppHandle, chat: ChatSession) -> Result<(), String> {
-    let path = chat_path(&app, &chat.id)?;
-    write_chat(&path, &chat)
 }
 
 #[tauri::command]
@@ -138,24 +125,6 @@ pub fn load_chat(app: AppHandle, id: String) -> Result<Option<ChatSession>, Stri
 pub fn save_chat(app: AppHandle, chat: ChatSession) -> Result<(), String> {
     let path = chat_path(&app, &chat.id)?;
     write_chat(&path, &chat)
-}
-
-#[tauri::command]
-pub fn rename_chat(app: AppHandle, id: String, title: String) -> Result<(), String> {
-    let title = title.trim().to_string();
-    if title.is_empty() {
-        return Err("El título no puede estar vacío".to_string());
-    }
-    let path = chat_path(&app, &id)?;
-    if !path.exists() {
-        return Err(format!("No existe el chat '{id}'"));
-    }
-    let raw = fs::read_to_string(&path).map_err(|e| format!("No se pudo leer el chat: {e}"))?;
-    let mut session: ChatSession =
-        serde_json::from_str(&raw).map_err(|e| format!("Chat corrupto: {e}"))?;
-    session.title = title;
-    session.updated_at = now_ms();
-    write_chat(&path, &session)
 }
 
 #[tauri::command]

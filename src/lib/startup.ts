@@ -18,16 +18,8 @@ export function scheduleIdle(cb: () => void): void {
 }
 
 /**
- * Lógica del spawn diferido de la terminal (TerminalView):
- * la PTY se crea la PRIMERA vez que el panel se hace visible (o al montar si
- * la sesión restaurada lo tenía abierto); una vez creada sobrevive a
- * ocultar/mostrar el panel (B4) — solo muere al desmontar o cambiar de workspace.
+ * Cerrar la última terminal cierra el panel (transición, no estado inicial)
  */
-export function shouldSpawnTerminal(visible: boolean, alreadySpawned: boolean): boolean {
-  return visible && !alreadySpawned
-}
-
-/** Cerrar la última terminal cierra el panel (transición, no estado inicial) */
 export function panelShouldClose(prevCount: number, nextCount: number): boolean {
   return prevCount > 0 && nextCount === 0
 }

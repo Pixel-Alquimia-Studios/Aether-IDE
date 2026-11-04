@@ -22,23 +22,12 @@ function formatTokens(n: number | null): string {
   return `${Math.round(n / 1000)}k`
 }
 
-type SettingsSection = 'general' | 'providers' | 'permissions'
-
 export function SettingsView() {
-  const [section, setSection] = useState<SettingsSection>('general')
+  // La sección vive en uiStore: el chat puede abrir Ajustes directamente en
+  // 'providers' sin efectos ni setState síncronos
+  const section = useUiStore((s) => s.settingsSection)
+  const setSection = useUiStore((s) => s.setSettingsSection)
   const t = useT()
-  const settingsFocus = useUiStore((s) => s.settingsFocus)
-  const setSettingsFocus = useUiStore((s) => s.setSettingsFocus)
-  const selectProvider = useSettingsStore((s) => s.selectProvider)
-
-  // Chat 401/403 → botón "Abrir Ajustes": abre la sección de proveedores con
-  // el proveedor afectado seleccionado, y limpia el foco
-  useEffect(() => {
-    if (!settingsFocus) return
-    setSection('providers')
-    selectProvider(settingsFocus)
-    setSettingsFocus(null)
-  }, [settingsFocus, selectProvider, setSettingsFocus])
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
