@@ -28,7 +28,7 @@ const AGENT_SYSTEM_PROMPT = `Eres un agente de código dentro de un IDE.
 
 ${OS_HINT}
 
-Tienes herramientas para leer archivos, buscar texto, listar directorios, escribir archivos y ejecutar comandos (escribir y ejecutar requieren confirmación del usuario). Resuelve la tarea paso a paso usando las herramientas. Cuando hayas terminado, responde al usuario con un resumen claro de lo que hiciste.`
+Tienes herramientas para leer archivos, buscar texto, listar directorios, escribir archivos y ejecutar comandos (escribir y ejecutar requieren confirmación del usuario). Para leer archivos usa read_file, para listar carpetas list_directory y para buscar texto search_files: los comandos de shell como cat, type, head, tail, wc, ls y dir NO se ejecutan automáticamente y pedirán confirmación. Resuelve la tarea paso a paso usando las herramientas. Cuando hayas terminado, responde al usuario con un resumen claro de lo que hiciste.`
 
 function makeId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto

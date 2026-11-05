@@ -122,7 +122,9 @@ const en = {
   'perm.writeAllow': 'Allow in this workspace',
   'perm.executeLabel': 'Command execution',
   'perm.executeAsk': 'Ask always (default)',
-  'perm.executeSafe': 'Safe commands only (auto-approve read-only)',
+  'perm.executeSafe': 'Safe commands only (read-only git, pwd, whoami, hostname, date, echo)',
+  'perm.safeList':
+    'Auto-approved: git status/diff/log/show/branch (read-only), pwd, whoami, hostname, date and echo. Reading files or listing folders (cat, ls, type…) always asks — for that the agent uses read_file, list_directory and search_files, which are contained by the backend.',
   'perm.note': 'Path containment always applies. Destructive commands always ask, even in auto mode.',
   'perm.noWorkspace': 'Open a workspace to configure agent permissions',
   'chat.approveAllowWorkspace': 'Approve and allow in this workspace',
@@ -358,7 +360,9 @@ const es: Record<TranslationKey, string> = {
   'perm.writeAllow': 'Permitir en este workspace',
   'perm.executeLabel': 'Ejecución de comandos',
   'perm.executeAsk': 'Preguntar siempre (default)',
-  'perm.executeSafe': 'Solo comandos seguros (auto-aprueba lectura)',
+  'perm.executeSafe': 'Solo comandos seguros (git de lectura, pwd, whoami, hostname, date, echo)',
+  'perm.safeList':
+    'Auto-aprobados: git status/diff/log/show/branch (solo lectura), pwd, whoami, hostname, date y echo. Leer archivos o listar carpetas (cat, ls, type…) siempre pide confirmación — para eso el agente usa read_file, list_directory y search_files, contenidas por el backend.',
   'perm.note': 'La contención de rutas aplica siempre. Comandos destructivos siempre preguntan, incluso en modo automático.',
   'perm.noWorkspace': 'Abre un workspace para configurar los permisos del agente',
   'chat.approveAllowWorkspace': 'Aprobar y permitir en este workspace',

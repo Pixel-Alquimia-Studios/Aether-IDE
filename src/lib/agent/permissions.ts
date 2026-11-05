@@ -175,6 +175,16 @@ export function isProtectedPath(relativePath: string): boolean {
 /**
  * Allowlist CON ARGUMENTOS: cada comando define qué argumentos acepta.
  * Todo lo que no esté en la lista => pregunta (fail-closed).
+ *
+ * DELIBERADAMENTE REDUCIDA (Lote G): NO hay comandos que lean archivos
+ * (cat, type, head, tail, wc, ls, dir). El agente tiene read_file,
+ * list_directory y search_files, contenidas por Rust con canonicalize.
+ *
+ * LÍMITE CONOCIDO (A4, diferido): la contención de rutas aquí es LÉXICA —
+ * un symlink/junction DENTRO del workspace que apunte afuera sería seguido
+ * por la shell sin que este chequeo lo vea. El write_file del backend sí
+ * canonicaliza (ensure_in_workspace); para execute la mitigación actual es
+ * la superficie mínima de esta allowlist (solo comandos sin rutas).
  */
 interface SafeCommandSpec {
   /** git: subcomandos permitidos */
@@ -189,8 +199,6 @@ interface SafeCommandSpec {
   noArgs?: boolean
   /** true = el comando acepta argumentos libres (sin efectos) */
   allowArgs?: boolean
-  /** true = el comando LEE archivos → los args-ruta deben estar en el workspace */
-  readsFiles?: boolean
 }
 
 const GIT_SUBCOMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch'])
@@ -206,13 +214,6 @@ const SAFE_EXECUTABLES: Record<string, SafeCommandSpec> = {
     rejectedFlags: GIT_REJECTED_FLAGS,
     safeFlags: GIT_SAFE_FLAGS,
   },
-  ls: { readsFiles: true },
-  dir: { readsFiles: true },
-  cat: { readsFiles: true },
-  type: { readsFiles: true },
-  head: { readsFiles: true },
-  tail: { readsFiles: true },
-  wc: { readsFiles: true },
   echo: { allowArgs: true },
   pwd: { noArgs: true },
   whoami: { noArgs: true },
@@ -224,7 +225,7 @@ const SAFE_EXECUTABLES: Record<string, SafeCommandSpec> = {
  * Parser que FALLA CERRADO: determina si un comando es seguro para
  * auto-ejecución en modo 'safe'. Cualquier duda → false (pregunta).
  */
-export function isCommandSafe(command: string, rootPath?: string): boolean {
+export function isCommandSafe(command: string): boolean {
   if (!command || !command.trim()) return false
 
   const trimmed = command.trim()
@@ -261,12 +262,12 @@ export function isCommandSafe(command: string, rootPath?: string): boolean {
   for (const segment of segments) {
     const clean = segment.replace(/\s+/g, ' ').trim().toLowerCase()
     if (!clean) continue
-    if (!isSegmentSafe(clean, rootPath)) return false
+    if (!isSegmentSafe(clean)) return false
   }
   return true
 }
 
-function isSegmentSafe(segment: string, rootPath?: string): boolean {
+function isSegmentSafe(segment: string): boolean {
   const tokens = segment.replace(/\s+/g, ' ').trim().toLowerCase().split(' ')
   const cmd = tokens[0]
   const spec = SAFE_EXECUTABLES[cmd]
@@ -275,14 +276,21 @@ function isSegmentSafe(segment: string, rootPath?: string): boolean {
   if (spec.noArgs) return tokens.length === 1
   if (cmd === 'git') return isGitSafe(tokens.slice(1))
 
-  const args = tokens.slice(1)
-
-  // Comandos que LEEN archivos: contención de rutas en los argumentos (req. 1)
-  if (spec.readsFiles) return areArgsInWorkspace(args, rootPath)
-
   if (spec.allowArgs) return true
 
   return false
+}
+
+/**
+ * Extrae la parte de ruta de un argumento de git: la forma `rev:ruta`
+ * (`HEAD:.env`, `:.env`, `master:src/.env`) deja solo la ruta; cualquier
+ * otro arg se devuelve tal cual.
+ */
+function gitArgPath(arg: string): string {
+  const idx = arg.indexOf(':')
+  // Los flags con ':' (p. ej. --foo:bar) no llegan aquí: solo args no-flag
+  if (idx === -1) return arg
+  return arg.slice(idx + 1)
 }
 
 function isGitSafe(args: string[]): boolean {
@@ -307,57 +315,19 @@ function isGitSafe(args: string[]): boolean {
   const joined = filtered.join(' ')
   if (GIT_REJECTED_FLAGS.test(joined)) return false
 
-  return true
-}
-
-/**
- * Contención de rutas para comandos que LEEN archivos (req. 1):
- * cada argumento que NO es un flag se verifica para que NO escape del workspace.
- * Rechaza: rutas absolutas, .., ~, variables, UNC, ADS, nombres reservados,
- * rutas protegidas (.env, .git/, package.json…).
- */
-function areArgsInWorkspace(args: string[], rootPath?: string): boolean {
-  for (const arg of args) {
+  // Rutas protegidas: cualquier arg no-flag — incluyendo lo que sigue a `--`
+  // y la forma `rev:ruta` — que, normalizado, apunte a una ruta protegida
+  // (.env, .git/, package.json…) => pregunta. Los comodines también (un
+  // pathspec `.*` puede expandirse a .env). Lote G: git show HEAD:.env,
+  // git show :.env, git log -p -- .env, git diff -- .env,
+  // git diff HEAD -- .git/config pasan a 'ask'.
+  for (const arg of filtered) {
     if (arg.startsWith('-')) continue
-
-    // Variables y expansiones
-    if (/[$%@]/.test(arg)) return false
-
-    // Rutas absolutas (Windows o Unix) — fuera del workspace
-    if (/^[a-z]:/i.test(arg)) return false
-    if (arg.startsWith('/')) return false
-
-    // UNC
-    if (arg.startsWith('\\\\')) return false
-
-    // Home shortcut
-    if (arg.startsWith('~')) return false
-
-    // Segmentos .. (escape del workspace)
-    const segments = arg.replace(/[\\/]+/g, '/').split('/')
-    if (segments.includes('..')) return false
-
-    // ADS (alternate data streams)
-    const fileName = segments[segments.length - 1] ?? ''
-    if (fileName.includes(':') && !/^[a-z]:$/i.test(fileName)) return false
-
-    // Nombres reservados de Windows
-    const stem = fileName.split('.')[0] ?? ''
-    if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/.test(stem)) return false
-
-    // Rutas protegidas (.env, .git/, package.json…)
-    const relative = segments.join('/')
-    if (isProtectedPath(relative)) return false
-
-    // Contención completa si tenemos el rootPath
-    if (rootPath) {
-      const normalizedRoot = normalizeWorkspaceKey(rootPath)
-      if (normalizedRoot) {
-        const resolved = normalizeWorkspaceKey(normalizedRoot + '/' + relative)
-        if (!resolved || !resolved.startsWith(normalizedRoot + '/')) return false
-      }
-    }
+    const pathPart = gitArgPath(arg)
+    if (/[?*[\]]/.test(pathPart)) return false
+    if (isProtectedPath(pathPart)) return false
   }
+
   return true
 }
 
@@ -397,7 +367,7 @@ export function evaluatePermission(
 
   if (action === 'execute_command') {
     if (perms.execute === 'safe' && options?.command) {
-      decision.auto = isCommandSafe(options.command, rootPath)
+      decision.auto = isCommandSafe(options.command)
     }
   }
 

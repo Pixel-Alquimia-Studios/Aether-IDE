@@ -599,6 +599,12 @@ function PermissionsSection() {
                 {t('perm.executeSafe')}
               </button>
             </div>
+            {/* Qué corre automático en 'safe' y qué usa el agente en su lugar */}
+            {current.execute === 'safe' && (
+              <p className="max-w-md text-[11px] leading-relaxed text-aether-text-dim">
+                {t('perm.safeList')}
+              </p>
+            )}
           </section>
 
           <p className="text-[11px] leading-relaxed text-aether-text-dim">{t('perm.note')}</p>
