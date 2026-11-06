@@ -20,7 +20,7 @@ export interface WorkspacePermissions {
   execute: ExecutePermission
 }
 
-export const DEFAULT_PERMISSIONS: WorkspacePermissions = { write: 'ask', execute: 'ask' }
+const DEFAULT_PERMISSIONS: WorkspacePermissions = { write: 'ask', execute: 'ask' }
 
 const STORAGE_KEY = 'aether-ide-agent-permissions'
 

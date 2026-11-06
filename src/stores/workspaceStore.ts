@@ -83,13 +83,3 @@ export const useWorkspaceStore = create<WorkspaceState>()((set, get) => ({
   readFile: (path) => fsReadFile(path),
 }))
 
-export function findNode(nodes: FileNode[], path: string): FileNode | null {
-  for (const node of nodes) {
-    if (node.path === path) return node
-    if (node.children) {
-      const found = findNode(node.children, path)
-      if (found) return found
-    }
-  }
-  return null
-}

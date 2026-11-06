@@ -102,7 +102,7 @@ export const AGENT_TOOLS: ToolDef[] = [
   },
 ]
 
-export function resolvePath(path: string, root: string): string {
+function resolvePath(path: string, root: string): string {
   if (!path || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('/')) return path
   return `${root.replace(/[\\/]+$/, '')}/${path}`
 }

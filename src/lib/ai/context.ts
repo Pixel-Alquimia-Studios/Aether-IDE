@@ -28,19 +28,6 @@ function truncateContext(s: string): string {
 }
 
 /** Lista plana de archivos del workspace (para el menú de menciones) */
-export function listWorkspaceFiles(): Array<{ path: string; name: string }> {
-  const { fileTree } = useWorkspaceStore.getState()
-  const files: Array<{ path: string; name: string }> = []
-  const walk = (nodes: FileNode[]): void => {
-    for (const node of nodes) {
-      if (node.kind === 'file') files.push({ path: node.path, name: node.name })
-      if (node.children) walk(node.children)
-    }
-  }
-  walk(fileTree)
-  return files
-}
-
 function buildWorkspaceTreeSummary(): string {
   const { fileTree } = useWorkspaceStore.getState()
   const lines: string[] = []

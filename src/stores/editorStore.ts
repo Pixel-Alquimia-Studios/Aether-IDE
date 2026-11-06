@@ -17,7 +17,7 @@ import type { EditorTab } from '@/types/editor'
 // Extensiones que se abren en el visualizador de imágenes (v0.3.0, fase B)
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif'])
 
-export function isImagePath(path: string): boolean {
+function isImagePath(path: string): boolean {
   const ext = (path.split('.').pop() ?? '').toLowerCase()
   return IMAGE_EXTENSIONS.has(ext)
 }
