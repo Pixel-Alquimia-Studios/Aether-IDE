@@ -461,7 +461,7 @@ const openSettings = useUiStore((s) => s.openSettings)
             className="flex-1 rounded border border-aether-border bg-aether-bg px-2 py-1 text-[12px] outline-none"
           >
             {models.length === 0 ? (
-              <option value="">Sin modelos</option>
+                <option value="">{t('chat.noModels')}</option>
             ) : (
               models.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -666,14 +666,14 @@ const openSettings = useUiStore((s) => s.openSettings)
               {isUser && msg.turnId && !streaming && !agentRunning && (
                 <div className="absolute top-1 right-1 hidden items-center gap-0.5 rounded-md bg-aether-surface/95 p-0.5 shadow-md ring-1 ring-aether-border group-hover:flex">
                   <button
-                    title="Editar y reenviar (revierte los cambios posteriores)"
+                    title={t('chat.editResendTitle')}
                     onClick={() => editMessageByTurn(msg.turnId as string, msg.content)}
                     className="rounded px-1.5 py-0.5 text-[11px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-aether-text"
                   >
                     ✏️
                   </button>
                   <button
-                    title="Eliminar (revierte los cambios del agente desde aquí)"
+                    title={t('chat.deleteRevertTitle')}
                     onClick={() => truncateFromTurn(msg.turnId as string)}
                     className="rounded px-1.5 py-0.5 text-[11px] text-aether-text-dim transition-colors hover:bg-white/10 hover:text-red-400"
                   >
@@ -795,12 +795,12 @@ const openSettings = useUiStore((s) => s.openSettings)
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
           {autoContextEnabled && activeCtxName && (
             <span
-              title={`Contexto automático: ${activeTabPath}`}
+              title={t('chat.autoContextTitle').replace('{name}', activeCtxName)}
               className="flex items-center gap-1 rounded-full border border-aether-border bg-aether-bg px-2 py-0.5 text-[10px] text-aether-text-dim"
             >
               📄 {activeCtxName}
               <button
-                title="Quitar contexto automático"
+                title={t('chat.removeAutoCtx')}
                 onClick={() => setAutoContextEnabled(false)}
                 className="text-aether-text-dim hover:text-aether-text"
               >
@@ -810,7 +810,7 @@ const openSettings = useUiStore((s) => s.openSettings)
           )}
           {!autoContextEnabled && activeCtxName && (
             <button
-              title="Restaurar contexto automático del editor"
+              title={t('chat.restoreAutoCtx')}
               onClick={() => setAutoContextEnabled(true)}
               className="rounded-full border border-dashed border-aether-border px-2 py-0.5 text-[10px] text-aether-text-dim hover:text-aether-text"
             >
@@ -824,7 +824,7 @@ const openSettings = useUiStore((s) => s.openSettings)
             >
               {m.kind === 'codebase' ? '🌐' : '📄'} {m.label}
               <button
-                title="Quitar"
+                title={t('chat.remove')}
                 onClick={() => removeMention(i)}
                 className="text-aether-text-dim hover:text-aether-text"
               >

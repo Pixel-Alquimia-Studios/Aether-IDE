@@ -201,6 +201,13 @@ const en = {
   'chat.authRejected':
     'Provider {nombre} rejected authentication (HTTP {codigo}). Check your API key and the model permissions.',
   'chat.openSettings': 'Open Settings',
+  // Tooltips y textos del chat (Lote G: fuera del hardcode)
+  'chat.editResendTitle': 'Edit and resend (reverts later changes)',
+  'chat.deleteRevertTitle': 'Delete (reverts agent changes from here)',
+  'chat.autoContextTitle': 'Automatic context: {name}',
+  'chat.removeAutoCtx': 'Remove automatic context',
+  'chat.restoreAutoCtx': 'Restore automatic editor context',
+  'chat.remove': 'Remove',
   'settings.keychainError': 'Could not access the OS keychain',
   'settings.keyChecking': 'Checking…',
   'settings.keyRejected': 'Rejected by the provider',
@@ -212,6 +219,7 @@ const en = {
   'settings.deleteNo': 'Cancel',
   'settings.customDeleteWarning':
     'Deleting the key breaks the host binding; when you enter it again it will bind to the current host.',
+  'settings.reason.ok': 'key accepted by the provider',
   'settings.reason.auth': 'authentication rejected',
   'settings.reason.rateLimit': 'rate limited, try again later',
   'settings.reason.serverError': 'provider server error',
@@ -441,6 +449,13 @@ const es: Record<TranslationKey, string> = {
   'chat.authRejected':
     'El proveedor {nombre} rechazó la autenticación (HTTP {codigo}). Revisa tu API key y los permisos del modelo.',
   'chat.openSettings': 'Abrir Ajustes',
+  // Tooltips y textos del chat (Lote G: fuera del hardcode)
+  'chat.editResendTitle': 'Editar y reenviar (revierte los cambios posteriores)',
+  'chat.deleteRevertTitle': 'Eliminar (revierte los cambios del agente desde aquí)',
+  'chat.autoContextTitle': 'Contexto automático: {name}',
+  'chat.removeAutoCtx': 'Quitar contexto automático',
+  'chat.restoreAutoCtx': 'Restaurar contexto automático del editor',
+  'chat.remove': 'Quitar',
   'settings.keychainError': 'No se pudo acceder al keychain del SO',
   'settings.keyChecking': 'Comprobando…',
   'settings.keyRejected': 'Rechazada por el proveedor',
@@ -452,6 +467,7 @@ const es: Record<TranslationKey, string> = {
   'settings.deleteNo': 'Cancelar',
   'settings.customDeleteWarning':
     'Borrar la key rompe el vínculo con el host; al introducirla de nuevo se vinculará al host actual.',
+  'settings.reason.ok': 'key aceptada por el proveedor',
   'settings.reason.auth': 'autenticación rechazada',
   'settings.reason.rateLimit': 'límite de peticiones, prueba más tarde',
   'settings.reason.serverError': 'error del servidor del proveedor',
