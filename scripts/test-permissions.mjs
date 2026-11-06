@@ -125,6 +125,8 @@ check('git diff --no-textconv safe', perms.isCommandSafe('git diff --no-textconv
 
 console.log('== evaluatePermission ==')
 delete globalThis.localStorage
+// Lote G: el fail-closed del home exige el home resuelto para el flujo normal
+perms.setHomeDir('C:\\Users\\test')
 check('write ask auto=false', perms.evaluatePermission('write_file', 'C:\\test\\proj').auto === false)
 globalThis.localStorage = { getItem: function() { return JSON.stringify({ workspaces: { 'c:/test/proj': { write: 'allow', execute: 'safe' } } }) }, setItem: function() {} }
 check('write allow + normal auto', perms.evaluatePermission('write_file', 'C:\\test\\proj', { relativePath: 'src/main.ts' }).auto === true)
@@ -133,5 +135,39 @@ check('exec safe git status auto', perms.evaluatePermission('execute_command', '
 check('exec safe rm ask', !perms.evaluatePermission('execute_command', 'C:\\test\\proj', { command: 'rm -rf /' }).auto)
 check('exec ask auto false', !perms.evaluatePermission('execute_command', 'C:\\test\\proj2', { command: 'git status' }).auto)
 delete globalThis.localStorage
+
+console.log('== isUnsafeWorkspace cableado (Lote G: fallaban antes) ==')
+// Sin home resuelto: fail-closed, NADA se auto-aprueba
+perms.setHomeDir(null)
+globalThis.localStorage = { getItem: function() { return JSON.stringify({ workspaces: { 'c:/test/proj': { write: 'allow', execute: 'safe' } } }) }, setItem: function() {} }
+check('sin home: write allow NO auto', !perms.evaluatePermission('write_file', 'C:\\test\\proj', { relativePath: 'src/main.ts' }).auto)
+check('sin home: exec safe NO auto', !perms.evaluatePermission('execute_command', 'C:\\test\\proj', { command: 'git status' }).auto)
+
+// Home resuelto: workspace normal auto-aprueba; el HOME y la raíz NUNCA
+perms.setHomeDir('C:\\Users\\test')
+check('home resuelto: write allow auto', perms.evaluatePermission('write_file', 'C:\\test\\proj', { relativePath: 'src/main.ts' }).auto === true)
+check('home resuelto: exec safe auto', perms.evaluatePermission('execute_command', 'C:\\test\\proj', { command: 'git status' }).auto === true)
+// El HOME con permisos guardados DE ANTES: 'ask' igualmente
+const home = 'C:\\Users\\test'
+globalThis.localStorage = { getItem: function() { return JSON.stringify({ workspaces: { 'c:/users/test': { write: 'allow', execute: 'safe' } } }) }, setItem: function() {} }
+check('HOME con allow guardado de antes: write ask', !perms.evaluatePermission('write_file', home, { relativePath: 'src/main.ts' }).auto)
+check('HOME con safe guardado de antes: exec ask', !perms.evaluatePermission('execute_command', home, { command: 'git status' }).auto)
+// setPermissions rechaza conceder sobre el HOME (storage limpio de partida)
+const mockStore2 = {}
+globalThis.localStorage = {
+  getItem: function(k) { return mockStore2[k] ?? null },
+  setItem: function(k, v) { mockStore2[k] = v },
+}
+perms.setPermissions(home, { write: 'allow', execute: 'safe' })
+check('setPermissions sobre HOME ignora allow', perms.getPermissions(home).write === 'ask')
+check('setPermissions sobre HOME ignora safe', perms.getPermissions(home).execute === 'ask')
+// Workspace normal sí se puede conceder
+perms.setPermissions('C:\\test\\proj', { write: 'allow', execute: 'safe' })
+check('workspace normal: setPermissions funciona', perms.getPermissions('C:\\test\\proj').write === 'allow')
+// Raíz de unidad: normalizeWorkspaceKey null → nada se guarda ni auto-aprueba
+perms.setPermissions('C:\\', { write: 'allow' })
+check('raíz de unidad: sin permisos', perms.getPermissions('C:\\').write === 'ask')
+delete globalThis.localStorage
+perms.setHomeDir(null)
 if (failures > 0) { console.error('Fallos: ' + failures); process.exit(1) }
 console.log('Tests de permisos: todos los checks pasaron')

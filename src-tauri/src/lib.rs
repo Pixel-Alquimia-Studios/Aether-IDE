@@ -42,6 +42,7 @@ pub fn run() {
             commands::pick_open_file,
             commands::pick_save_file,
             commands::show_window,
+    commands::user_home_dir,
             commands::exit_app,
             commands_ai::list_providers,
     commands_ai::api_key_statuses,

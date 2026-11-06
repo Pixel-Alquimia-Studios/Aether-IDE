@@ -129,6 +129,19 @@ pub fn show_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Directorio home del usuario (para bloquear permisos automáticos sobre él).
+/// El frontend lo consulta UNA vez al arrancar y lo cachea en memoria.
+#[tauri::command]
+pub fn user_home_dir() -> Result<String, String> {
+    if let Some(home) = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .filter(|h| !h.is_empty())
+    {
+        return Ok(home.to_string_lossy().into_owned());
+    }
+    Err("No se pudo resolver el directorio del usuario".to_string())
+}
+
 #[tauri::command]
 pub fn set_workspace(state: State<'_, WorkspaceState>, path: String) -> Result<String, String> {
     let canon = Path::new(&path)

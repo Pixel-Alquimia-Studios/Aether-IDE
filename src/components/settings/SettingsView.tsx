@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useT, type TranslationKey } from '@/lib/i18n'
 import { saveCustomBaseUrl } from '@/lib/ai/api'
 import { filterModels } from '@/lib/ai/modelFilter'
-import { getPermissions, setPermissions } from '@/lib/agent/permissions'
+import { getHomeDir, getPermissions, isUnsafeWorkspace, setPermissions } from '@/lib/agent/permissions'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
@@ -535,6 +535,10 @@ function PermissionsSection() {
   const t = useT()
   const rootPath = useWorkspaceStore((s) => s.rootPath)
   const current = rootPath ? getPermissions(rootPath) : { write: 'ask' as const, execute: 'ask' as const }
+  // Workspace inseguro (raíz de unidad o el HOME del usuario): los permisos
+  // automáticos no se pueden conceder — el backend y el parser lo fuerzan
+  const home = getHomeDir()
+  const unsafe = rootPath !== null && home !== null && isUnsafeWorkspace(rootPath, home)
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -543,7 +547,13 @@ function PermissionsSection() {
 
       {!rootPath && <p className="mt-4 text-[12px] text-amber-400">{t('perm.noWorkspace')}</p>}
 
-      {rootPath && (
+      {unsafe && (
+        <p className="mt-4 max-w-xl text-[12px] leading-relaxed text-amber-400">
+          {t('perm.unsafeWorkspace')}
+        </p>
+      )}
+
+      {rootPath && !unsafe && (
         <div className="mt-4 max-w-xl space-y-6">
           <section>
             <label className="text-[11px] font-semibold uppercase tracking-wider text-aether-text-dim">

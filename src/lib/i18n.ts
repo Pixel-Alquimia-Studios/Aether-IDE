@@ -127,6 +127,8 @@ const en = {
     'Auto-approved: git status/diff/log/show/branch (read-only), pwd, whoami, hostname, date and echo. Reading files or listing folders (cat, ls, type…) always asks — for that the agent uses read_file, list_directory and search_files, which are contained by the backend.',
   'perm.note': 'Path containment always applies. Destructive commands always ask, even in auto mode.',
   'perm.noWorkspace': 'Open a workspace to configure agent permissions',
+  'perm.unsafeWorkspace':
+    'This workspace is a drive root or your user folder: automatic permissions are not available here. The agent will always ask for confirmation.',
   'chat.approveAllowWorkspace': 'Approve and allow in this workspace',
   'chat.placeholderPlan': 'Write your plan or question… (use @ and /qa, /security, /audit)',
   'chat.placeholderAgent': 'Task for the agent… (/qa, /security, /audit for analysis)',
@@ -365,6 +367,8 @@ const es: Record<TranslationKey, string> = {
     'Auto-aprobados: git status/diff/log/show/branch (solo lectura), pwd, whoami, hostname, date y echo. Leer archivos o listar carpetas (cat, ls, type…) siempre pide confirmación — para eso el agente usa read_file, list_directory y search_files, contenidas por el backend.',
   'perm.note': 'La contención de rutas aplica siempre. Comandos destructivos siempre preguntan, incluso en modo automático.',
   'perm.noWorkspace': 'Abre un workspace para configurar los permisos del agente',
+  'perm.unsafeWorkspace':
+    'Este workspace es una raíz de unidad o tu carpeta de usuario: aquí no se pueden conceder permisos automáticos. El agente pedirá confirmación siempre.',
   'chat.approveAllowWorkspace': 'Aprobar y permitir en este workspace',
   'chat.placeholderPlan': 'Escribe tu plan o pregunta… (usa @ y /qa, /security, /audit)',
   'chat.placeholderAgent': 'Tarea para el agente… (/qa, /security, /audit para análisis)',

@@ -20,6 +20,7 @@ import { UpdateOverlay } from '@/components/updater/UpdateOverlay'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
 import { scheduleIdle, markStartup, panelShouldClose } from '@/lib/startup'
+import { setHomeDir } from '@/lib/agent/permissions'
 import { ensureListeners } from '@/stores/terminalStore'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
 import { useEditorStore } from '@/stores/editorStore'
@@ -57,6 +58,10 @@ export default function App() {
     void invoke('show_window').catch(() => undefined)
     // Calienta los listeners de terminal (evita la carrera listeners vs spawn)
     void ensureListeners()
+    // Lote G: home real del usuario para el fail-closed de permisos del agente
+    void invoke<string>('user_home_dir')
+      .then((home) => setHomeDir(home))
+      .catch(() => undefined)
   }, [])
 
   const refreshTree = useWorkspaceStore((s) => s.refreshTree)

@@ -99,6 +99,8 @@ export function getPermissions(rootPath: string, isWindows = true): WorkspacePer
 /**
  * Guarda los permisos para un workspace. Solo acepta valores válidos;
  * cualquier otro valor se guarda como 'ask' (fail-closed).
+ * RECHAZA permitir en un workspace inseguro (raíz de unidad o el directorio
+ * home del usuario): se guarda 'ask' en ambos.
  */
 export function setPermissions(
   rootPath: string,
@@ -107,6 +109,8 @@ export function setPermissions(
 ): void {
   const key = normalizeWorkspaceKey(rootPath, isWindows)
   if (!key) return
+  // Raíz de unidad (key null ya la cubre) o HOME del usuario: nunca permitir
+  if (homeDirCache && isUnsafeWorkspace(rootPath, homeDirCache)) return
   const storage = readStorage()
   storage.workspaces[key] = {
     write: perms.write === 'allow' ? 'allow' : 'ask',
@@ -118,6 +122,22 @@ export function setPermissions(
 /** Revoca los permisos de un workspace (vuelve a 'ask') */
 export function revokePermissions(rootPath: string, isWindows = true): void {
   setPermissions(rootPath, { write: 'ask', execute: 'ask' }, isWindows)
+}
+
+// ============ Workspace inseguro (Lote G: isUnsafeWorkspace cableado) ============
+
+// Home resuelto desde Rust (user_home_dir) UNA vez al arrancar; mientras no
+// llegue, evaluatePermission falla cerrado (no auto-aprueba nada)
+let homeDirCache: string | null = null
+
+/** App.tsx inyecta el home real del usuario aquí al arrancar */
+export function setHomeDir(home: string | null): void {
+  homeDirCache = home?.trim() ? home.trim() : null
+}
+
+/** Home cacheado (o null si aún no llegó) */
+export function getHomeDir(): string | null {
+  return homeDirCache
 }
 
 // ============ Rutas protegidas (SIEMPRE preguntan) ============
@@ -344,6 +364,8 @@ export interface PermissionDecision {
 /**
  * Evalúa si una acción del agente puede ejecutarse automáticamente.
  * Se llama en el momento de CADA tool call con el workspace ACTUAL.
+ * FAIL-CLOSED: si el workspace es inseguro (raíz de unidad o el HOME del
+ * usuario) devuelve 'ask' AUNQUE haya un valor guardado de antes.
  */
 export function evaluatePermission(
   action: AgentActionType,
@@ -355,6 +377,13 @@ export function evaluatePermission(
     auto: false,
     protectedPath: false,
     permissions: perms,
+  }
+
+  // Workspace inseguro (home del usuario o raíz): SIEMPRE preguntar, incluso
+  // con un permiso guardado de una sesión anterior. Sin home resuelto aún,
+  // fail-closed igualmente (no se auto-aprueba nada)
+  if (!homeDirCache || isUnsafeWorkspace(rootPath, homeDirCache)) {
+    return decision
   }
 
   if (action === 'write_file') {
