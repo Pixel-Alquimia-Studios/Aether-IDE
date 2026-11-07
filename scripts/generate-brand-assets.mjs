@@ -133,39 +133,95 @@ async function pngToBmp24(pngBuffer, width, height, outputPath) {
   fs.writeFileSync(outputPath, bmp)
 }
 
-async function generateInstallerImage(svgFile, width, height, outputPath, label) {
-  // Rasteriza el SVG al tamaño exacto con fondo oscuro
-  const pngBuffer = await sharp(svgFile, { density: 300 })
-    .resize(width, height, { fit: 'contain', background: '#0C0D1C' })
-    .flatten({ background: '#0C0D1C' })
-    .png()
-    .toBuffer()
+// ---- 5. BMPs de instalador (composición por zonas, sin estirar el símbolo) ----
+// WiX pinta el texto del asistente en NEGRO: el dialog reserva su columna
+// izquierda (164 px) para el arte de marca y el banner coloca el símbolo a la
+// derecha (el título va a la izquierda). NSIS MUI2 dibuja el header a la
+// izquierda (sin MUI_HEADERIMAGE_RIGHT) y el título a la derecha del bitmap.
 
-  await pngToBmp24(pngBuffer, width, height, outputPath)
-  const size = fs.statSync(outputPath).size
-  console.log(`✓ ${label}: ${path.basename(outputPath)} (${width}x${height}, ${(size / 1024).toFixed(1)} KB)`)
+// Símbolo Aether (estrella + anillo + punto) SIN el rect de fondo del icono:
+// así se puede centrar sobre cualquier fondo conservando la proporción.
+function symbolMarkup(x, y, size) {
+  return `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 256 256">
+    <defs>
+      <linearGradient id="symg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#A78BFA"/>
+        <stop offset="0.55" stop-color="#7C6CF5"/>
+        <stop offset="1" stop-color="#3B82F6"/>
+      </linearGradient>
+    </defs>
+    <circle cx="128" cy="128" r="96" fill="none" stroke="url(#symg)" stroke-width="3" opacity="0.35"/>
+    <path d="M128 48 Q128 128 208 128 Q128 128 128 208 Q128 128 48 128 Q128 128 128 48 Z" fill="url(#symg)"/>
+    <circle cx="196" cy="60" r="7" fill="#A78BFA"/>
+  </svg>`
 }
 
-// NSIS
-await generateInstallerImage(
-  path.join(BRAND, 'aether-ide-icon.svg'), 150, 57,
-  path.join(ICONS, 'nsis-header.bmp'), 'NSIS header',
-)
-await generateInstallerImage(
-  path.join(BRAND, 'aether-ide-icon.svg'), 164, 314,
-  path.join(ICONS, 'nsis-sidebar.bmp'), 'NSIS sidebar',
-)
+const BRAND_DARK = '#0C0D1C'
 
-// WiX (MSI)
-ensureDir(ICONS)
-await generateInstallerImage(
-  path.join(BRAND, 'aether-ide-icon.svg'), 493, 58,
-  path.join(ICONS, 'wix-banner.bmp'), 'WiX banner',
-)
-await generateInstallerImage(
-  path.join(BRAND, 'aether-ide-icon.svg'), 493, 312,
-  path.join(ICONS, 'wix-dialog.bmp'), 'WiX dialog',
-)
+// Cada composición es un SVG completo (fondo + zonas de marca + símbolo
+// anidado con viewBox, que escala el contenido SIN deformarlo)
+const INSTALLER_COMPOSITIONS = [
+  {
+    // WiX dialog: arte SOLO en la columna izquierda de 164 px; el resto blanco
+    // para el texto negro del asistente (493x312 requerido por WiX)
+    name: 'wix-dialog',
+    width: 493,
+    height: 312,
+    out: path.join(ICONS, 'wix-dialog.bmp'),
+    label: 'WiX dialog',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="493" height="312">
+      <rect width="493" height="312" fill="#FFFFFF"/>
+      <rect x="0" y="0" width="164" height="312" fill="${BRAND_DARK}"/>
+      ${symbolMarkup(16, 90, 132)}
+    </svg>`,
+  },
+  {
+    // WiX banner: fondo blanco, símbolo de 44 px pegado al borde derecho
+    // (el título del diálogo se pinta en negro a la izquierda)
+    name: 'wix-banner',
+    width: 493,
+    height: 58,
+    out: path.join(ICONS, 'wix-banner.bmp'),
+    label: 'WiX banner',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="493" height="58">
+      <rect width="493" height="58" fill="#FFFFFF"/>
+      ${symbolMarkup(449, 7, 44)}
+    </svg>`,
+  },
+  {
+    // NSIS header: fondo blanco con el símbolo pequeño a la IZQUIERDA
+    // (MUI2 sin MUI_HEADERIMAGE_RIGHT: título del asistente a la derecha)
+    name: 'nsis-header',
+    width: 150,
+    height: 57,
+    out: path.join(ICONS, 'nsis-header.bmp'),
+    label: 'NSIS header',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="57">
+      <rect width="150" height="57" fill="#FFFFFF"/>
+      ${symbolMarkup(6, 6.5, 44)}
+    </svg>`,
+  },
+  {
+    // NSIS sidebar: sin cambios (fondo de marca completo, sin texto encima)
+    // - símbolo centrado con proporción intacta
+    name: 'nsis-sidebar',
+    width: 164,
+    height: 314,
+    out: path.join(ICONS, 'nsis-sidebar.bmp'),
+    label: 'NSIS sidebar',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="164" height="314">
+      <rect width="164" height="314" fill="${BRAND_DARK}"/>
+      ${symbolMarkup(16, 90, 132)}
+    </svg>`,
+  },
+]
+
+for (const comp of INSTALLER_COMPOSITIONS) {
+  const pngBuffer = await sharp(Buffer.from(comp.svg)).png().toBuffer()
+  await pngToBmp24(pngBuffer, comp.width, comp.height, comp.out)
+  const size = fs.statSync(comp.out).size
+  console.log(`✓ ${comp.label}: ${path.basename(comp.out)} (${comp.width}x${comp.height}, ${(size / 1024).toFixed(1)} KB)`)
+}
 
 // ---- 6. Preview de pantalla de carga ----
 // (la pantalla de carga es HTML — generamos un PNG de referencia con sharp)
@@ -184,18 +240,71 @@ const loadScreenSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" heig
 await sharp(Buffer.from(loadScreenSvg)).png().toFile(path.join(PREVIEWS, 'loading-screen.png'))
 console.log('✓ Preview de pantalla de carga')
 
-// ---- 7. Preview de BMPs de instalador (desde el SVG, no desde el BMP) ----
-const installerPreviews = [
-  ['nsis-header', 150, 57], ['nsis-sidebar', 164, 314],
-  ['wix-banner', 493, 58], ['wix-dialog', 493, 312],
-]
-for (const [name, w, h] of installerPreviews) {
-  await sharp(path.join(BRAND, 'aether-ide-icon.svg'), { density: 300 })
-    .resize(w, h, { fit: 'contain', background: '#0C0D1C' })
-    .flatten({ background: '#0C0D1C' })
-    .png()
-    .toFile(path.join(PREVIEWS, `${name}-preview.png`))
+// ---- 7. Maquetas del instalador (bitmap compuesto + texto negro del asistente) ----
+// Cada maqueta simula la ventana del instalador REAL: el bitmap en su sitio y
+// el texto negro que WiX/NSIS pinta encima, para validar la legibilidad.
+
+// Textos simulados del asistente (los que dibujan WiX/NSIS)
+function mockFont(size, weight = 400, color = '#000000') {
+  return `font-family="Segoe UI, system-ui, sans-serif" font-size="${size}" font-weight="${weight}" fill="${color}"`
 }
-console.log('✓ Previews de instalador')
+
+// WiX dialog (Welcome): arte a la izquierda, título y párrafo NEGRO a la derecha
+const wixDialogMock = `<svg xmlns="http://www.w3.org/2000/svg" width="493" height="312">
+  ${INSTALLER_COMPOSITIONS[0].svg.replace('<svg xmlns="http://www.w3.org/2000/svg" width="493" height="312">', '').replace('</svg>', '')}
+  <text x="180" y="60" ${mockFont(16, 600)}>Welcome to the Aether IDE</text>
+  <text x="180" y="84" ${mockFont(16, 600)}>Setup Wizard</text>
+  <text x="180" y="130" ${mockFont(11, 400, '#333333')}>The installer will guide you through the steps</text>
+  <text x="180" y="148" ${mockFont(11, 400, '#333333')}>required to install Aether IDE 0.4.0 on your computer.</text>
+  <text x="180" y="176" ${mockFont(11, 400, '#333333')}>WARNING: This program is protected by copyright law.</text>
+</svg>`
+
+// WiX banner: título negro a la izquierda, símbolo a la derecha (sin solape)
+const wixBannerMock = `<svg xmlns="http://www.w3.org/2000/svg" width="493" height="58">
+  ${INSTALLER_COMPOSITIONS[1].svg.replace('<svg xmlns="http://www.w3.org/2000/svg" width="493" height="58">', '').replace('</svg>', '')}
+  <text x="12" y="26" ${mockFont(12, 600)}>Aether IDE Setup</text>
+  <text x="12" y="44" ${mockFont(9, 400, '#555555')}>Installing Aether IDE. This may take several minutes.</text>
+</svg>`
+
+// NSIS header: ventana simulada - bitmap a la izquierda, título negro a la derecha
+const nsisHeaderMock = `<svg xmlns="http://www.w3.org/2000/svg" width="502" height="337">
+  <rect width="502" height="337" fill="#FFFFFF"/>
+  ${INSTALLER_COMPOSITIONS[2].svg.replace('<svg xmlns="http://www.w3.org/2000/svg" width="150" height="57">', '').replace('</svg>', '')}
+  <text x="166" y="24" ${mockFont(11, 600)}>Aether IDE Setup</text>
+  <text x="166" y="42" ${mockFont(9, 400, '#555555')}>Choose components</text>
+  <rect x="0" y="57" width="502" height="1" fill="#D4D4D8"/>
+  <text x="24" y="110" ${mockFont(11, 400)}>Choose the components you want to install.</text>
+  <rect x="330" y="290" width="75" height="26" fill="#F4F4F5" stroke="#D4D4D8"/>
+  <text x="348" y="307" ${mockFont(10, 400)}>Cancel</text>
+  <rect x="413" y="290" width="75" height="26" fill="#F4F4F5" stroke="#D4D4D8"/>
+  <text x="432" y="307" ${mockFont(10, 400)}>Next</text>
+</svg>`
+
+// NSIS sidebar (Welcome): bitmap a la izquierda SIN texto encima, texto a la derecha
+const nsisSidebarMock = `<svg xmlns="http://www.w3.org/2000/svg" width="502" height="355">
+  <rect width="502" height="355" fill="#FFFFFF"/>
+  ${INSTALLER_COMPOSITIONS[3].svg.replace('<svg xmlns="http://www.w3.org/2000/svg" width="164" height="314">', '').replace('</svg>', '')}
+  <text x="188" y="50" ${mockFont(13, 600)}>Welcome to the Aether IDE</text>
+  <text x="188" y="72" ${mockFont(13, 600)}>Setup Wizard</text>
+  <text x="188" y="110" ${mockFont(10, 400, '#333333')}>This wizard will guide you through the installation</text>
+  <text x="188" y="128" ${mockFont(10, 400, '#333333')}>of Aether IDE 0.4.0.</text>
+  <text x="188" y="156" ${mockFont(10, 400, '#333333')}>It is recommended that you close all other applications</text>
+  <text x="188" y="174" ${mockFont(10, 400, '#333333')}>before starting Setup.</text>
+  <rect x="188" y="300" width="90" height="30" fill="#F4F4F5" stroke="#D4D4D8"/>
+  <text x="212" y="319" ${mockFont(10, 400)}>Cancel</text>
+  <rect x="290" y="300" width="90" height="30" fill="#F4F4F5" stroke="#D4D4D8"/>
+  <text x="322" y="319" ${mockFont(10, 400)}>Next</text>
+</svg>`
+
+// Las maquetas sustituyen a las previews planas (que no reflejaban el texto)
+for (const old of ['nsis-header-preview.png', 'nsis-sidebar-preview.png', 'wix-banner-preview.png', 'wix-dialog-preview.png']) {
+  const oldPath = path.join(PREVIEWS, old)
+  if (fs.existsSync(oldPath)) fs.rmSync(oldPath)
+}
+await sharp(Buffer.from(wixDialogMock)).png().toFile(path.join(PREVIEWS, 'wix-dialog-mock.png'))
+await sharp(Buffer.from(wixBannerMock)).png().toFile(path.join(PREVIEWS, 'wix-banner-mock.png'))
+await sharp(Buffer.from(nsisHeaderMock)).png().toFile(path.join(PREVIEWS, 'nsis-header-mock.png'))
+await sharp(Buffer.from(nsisSidebarMock)).png().toFile(path.join(PREVIEWS, 'nsis-sidebar-mock.png'))
+console.log('✓ Maquetas del instalador con texto del asistente (4)')
 
 console.log('\nTodos los brand assets generados. Previews en .brand-previews/')
