@@ -19,7 +19,7 @@ import { TermsDialog } from '@/components/settings/TermsDialog'
 import { UpdateOverlay } from '@/components/updater/UpdateOverlay'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useSession } from '@/hooks/useSession'
-import { scheduleIdle, markStartup, panelShouldClose } from '@/lib/startup'
+import { scheduleIdle, markStartup, panelShouldClose, removeBootScreenAfterMin } from '@/lib/startup'
 import { setHomeDir } from '@/lib/agent/permissions'
 import { ensureListeners } from '@/stores/terminalStore'
 import { useWorkspaceEvents } from '@/hooks/useWorkspaceEvents'
@@ -52,9 +52,12 @@ export default function App() {
   useSession()
 
   // Parte 3 (v0.4.0): primer hito + mostrar la ventana al primer commit de
-  // React — la ventana nace oculta y aquí ya hay UI pintada (sin flash blanco)
+  // React - la ventana nace oculta y aquí ya hay UI pintada (sin flash blanco)
   useEffect(() => {
     markStartup('aether:first-render')
+    // Lote H: retiro del placeholder al cumplirse primer render + BOOT_MIN_MS
+    // (sin bloquear: la restauración sigue en vuelo detrás del placeholder)
+    removeBootScreenAfterMin()
     void invoke('show_window').catch(() => undefined)
     // Calienta los listeners de terminal (evita la carrera listeners vs spawn)
     void ensureListeners()

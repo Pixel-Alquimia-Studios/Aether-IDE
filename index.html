@@ -8,10 +8,16 @@
     <style>
       /* Pantalla de arranque (Parte 3, v0.4.0): evita el flash blanco del
          WebView mientras se carga el bundle. Estilos 100% inline, sin JS ni
-         fuentes remotas; paleta Aether Night. React retira este placeholder
-         automáticamente al hacer commit en #root. */
+         fuentes remotas; paleta Aether Night. Lote H: vive FUERA de #root,
+         cubre toda la ventana (fixed) y bloquea clics mientras es visible;
+         se retira con BOOT_MIN_MS + primer render. */
       html, body { margin: 0; background: #16161d; }
       #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #16161d;
+        pointer-events: auto;
         height: 100vh;
         display: flex;
         flex-direction: column;
@@ -50,26 +56,29 @@
     </style>
   </head>
   <body>
-    <div id="root">
-      <div id="boot" aria-busy="true" aria-label="Cargando Aether IDE">
-        <!-- Lote E: símbolo SVG inline con IDs únicos (boot-*) -->
-        <svg class="logo" viewBox="0 0 256 256" width="56" height="56" fill="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="boot-grad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#A78BFA"/>
-              <stop offset="0.55" stop-color="#7C6CF5"/>
-              <stop offset="1" stop-color="#3B82F6"/>
-            </linearGradient>
-          </defs>
-          <circle cx="128" cy="128" r="96" fill="none" stroke="url(#boot-grad)" stroke-width="3" opacity="0.35"/>
-          <path d="M128 48 Q128 128 208 128 Q128 128 128 208 Q128 128 48 128 Q128 128 128 48 Z" fill="url(#boot-grad)"/>
-          <circle cx="196" cy="60" r="7" fill="#A78BFA"/>
-        </svg>
-        <div class="name">Aether IDE</div>
-        <div class="bar"><i></i></div>
-        <div class="hint">preparando el editor…</div>
-      </div>
+    <!-- Lote H: el placeholder vive FUERA de #root — React ya no lo retira al
+         montar; removeBootScreenAfterMin lo retira cuando se cumplen el primer
+         render Y BOOT_MIN_MS. Cubre la ventana (fixed + inset 0) e intercepta
+         clics y teclado (installBootScreenGuard) mientras está visible. -->
+    <div id="boot" aria-busy="true" aria-label="Cargando Aether IDE">
+      <!-- Lote E: símbolo SVG inline con IDs únicos (boot-*) -->
+      <svg class="logo" viewBox="0 0 256 256" width="56" height="56" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="boot-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#A78BFA"/>
+            <stop offset="0.55" stop-color="#7C6CF5"/>
+            <stop offset="1" stop-color="#3B82F6"/>
+          </linearGradient>
+        </defs>
+        <circle cx="128" cy="128" r="96" fill="none" stroke="url(#boot-grad)" stroke-width="3" opacity="0.35"/>
+        <path d="M128 48 Q128 128 208 128 Q128 128 128 208 Q128 128 48 128 Q128 128 128 48 Z" fill="url(#boot-grad)"/>
+        <circle cx="196" cy="60" r="7" fill="#A78BFA"/>
+      </svg>
+      <div class="name">Aether IDE</div>
+      <div class="bar"><i></i></div>
+      <div class="hint">preparando el editor…</div>
     </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

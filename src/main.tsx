@@ -50,10 +50,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import { markStartup } from './lib/startup'
+import { markStartup, installBootScreenGuard } from './lib/startup'
 
 // Parte 3 (v0.4.0): primer hito del arranque (eval del módulo principal)
 markStartup('aether:start')
+// Lote H: guard de teclado del placeholder (los clics los bloquea #boot con
+// position:fixed; el retiro lo hace removeBootScreenAfterMin en el 1er render)
+installBootScreenGuard()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
