@@ -30,26 +30,47 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 - **Chat con streaming** por canal IPC nativo, con selector de **nivel de razonamiento** (Low/Medium/High/Max) para modelos thinking
 - **Bloques de razonamiento** colapsables (Chain of Thought de DeepSeek R1, Claude, o-series…)
 - **Modo Agente con tool-calling**: `read_file`, `search_files`, `list_directory`, `write_file` y `execute_command` — con **confirmación del usuario** para acciones destructivas
-- **Subagentes de análisis de solo lectura**: `/qa` (BugBot 🐛), `/security` (SecBot 🛡) y `/audit` (AuditBot 📋) — reportan hallazgos con badges de severidad (critical/high/medium/low) sin tocar tu código
+- **Subagentes de análisis de solo lectura**: `/qa` (BugBot 🐛), `/security` (SecBot 🛡), `/audit` (AuditBot 📋) y `/ux` (UxBot 🎨, guía de diseño basada en el motor BM25 de ui-ux-pro-max) — reportan hallazgos con badges de severidad sin tocar tu código
 - **Agent Time Travel**: checkpoints automáticos antes de cada escritura; editar/eliminar un mensaje anterior **revierte los archivos** aplicados desde ese punto
 - **Menciones `@`**: adjunta archivos (`@main.ts`), el archivo actual (`@current`) o la estructura del workspace (`@codebase`) al contexto del LLM
 - **Inline completions** (ghost text) aceptables con Tab, con debounce inteligente
 - **Edit with prompt** (`Ctrl+I`): diff editor inline sobre la selección con Aceptar/Rechazar
-- Métricas por respuesta: `⚡ 1.4s · ~320 tokens`
-- API keys en el **keychain del SO** (Credential Manager / Keychain) — nunca en archivos planos; fetch dinámico de modelos con metadatos (contexto, modalidades) y retry con backoff exponencial ante rate limits (429/503)
+- Métricas por respuesta con **tokens reales** (y cacheados si el proveedor los reporta): `⚡ 1.4s · 320 tokens · 💰 80 cacheados`
+- **API keys blindadas**: guardadas en el **keychain del SO** (nunca en archivos planos), **validadas contra el proveedor** al guardar (con botón *Reintentar*), badge con estado (configurada · …abcd / comprobando / rechazada / no verificable) y el hint de los últimos 4 caracteres calculado en Rust — la key jamás sale del keychain
+- **Proveedor personalizado**: URL base OpenAI-compatible validada en Rust (HTTPS para hosts públicos; HTTP solo loopback/LAN/*.local), sin seguir redirecciones y con la key ligada a host:puerto
+- Fetch dinámico de modelos con metadatos (contexto, modalidades y **nombre legible**), **filtro de búsqueda** en catálogos grandes (OpenRouter 300+) y retry con backoff exponencial ante errores transitorios (408/429/5xx/504/529)
+
+### Permisos del agente
+- **Escritura**: preguntar siempre (por defecto) o permitir por workspace — las rutas protegidas (`.git/`, `.github/`, `.vscode/`, `.env*`, `.husky/`, `.cargo/`, `.npmrc`, `.gitmodules`, `package.json`) **siempre piden confirmación**
+- **Ejecución "safe"** de superficie mínima: solo `git` de lectura (status/diff/log/show/branch), `pwd`, `whoami`, `hostname`, `date` y `echo` — con rechazo de rutas protegidas incluso en la forma `rev:ruta` y los pathspec tras `--` (`git show HEAD:.env` pide confirmación)
+- Fail-closed por diseño: el **HOME del usuario y las raíces de unidad nunca se auto-aprueban** (ni con permisos guardados de antes), y el backend contiene todas las rutas con `canonicalize`
 
 ### Herramientas de desarrollo
 - **Integración Git completa**: staged/unstaged, stage/unstage individual y masivo, commit, push/pull
-- **Terminal integrada** (`Ctrl+J`): PTY real (ConPTY en Windows) con PowerShell, conectada a `xterm.js`
+- **Terminal integrada** (`Ctrl+J`): PTY real (ConPTY en Windows) con **barra lateral para hasta 8 terminales**, shells detectadas (pwsh/PowerShell/cmd/Git Bash/WSL) y reinicio de sesiones muertas
+- **Pantalla de carga sin flash blanco**: ventana oculta hasta que hay UI pintada, con placeholder de marca
 - Persistencia completa: workspace, pestañas, layout, modelos obtenidos y **sesiones de chat/agentes** sobreviven a recargas y reinicios
 - **Panel Plan / Agente** con timeline unificado: la conversación y los pasos del agente permanecen visibles al alternar de modo
 - Los **chats son por carpeta**: cada workspace tiene su propio historial de conversaciones y sesiones de agente
+- **Identidad de marca propia**: logo Aether (gradiente violeta), iconos de app e instalador regenerados desde SVG
 
 ## ⬇ Descargas
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.3.1 *(actual)*
+### v0.4.0 *(actual)*
+
+> 🚀 Los releases se publican automáticamente con GitHub Actions ([GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest)) y se espejan en `downloads/` del repo por si acaso.
+
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.4.0-x64-portable.exe](downloads/0.4.0/aether-ide-0.4.0-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 12,04 MB |
+| [aether-ide-0.4.0-x64-setup.exe](downloads/0.4.0/aether-ide-0.4.0-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,81 MB |
+| [aether-ide-0.4.0-x64.msi](downloads/0.4.0/aether-ide-0.4.0-x64.msi) | Instalador MSI (Windows x64) | 7,30 MB |
+
+> ⬆ Los usuarios de v0.3.0+ reciben esta actualización automáticamente (botón **⬆ Actualizar**).
+
+### v0.3.1
 
 > 🚀 Los releases se publican automáticamente con GitHub Actions ([GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest)) y se espejan en `downloads/` del repo por si acaso.
 
@@ -131,6 +152,55 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.4.0
+
+Release de **expansión y blindaje**: 5 proveedores nuevos + proveedor personalizado, validación de API keys, permisos del agente endurecidos, subagente de UX, identidad de marca y arranque sin flash blanco.
+
+**Añadido — IA**
+- **5 proveedores nuevos** OpenAI-compatibles: **OpenRouter** (catálogo de 300+ modelos con nombre legible), **Z.ai (GLM)**, **Cerebras**, **Fireworks AI** y **Moonshot (Kimi)** — el gateway pasa de 13 a 18 proveedores
+- **Proveedor personalizado**: URL base OpenAI-compatible configurada en Ajustes y **validada en Rust al guardar Y al usar** — HTTPS obligatorio para hosts públicos; HTTP solo para loopback, redes privadas (10/8, 172.16/12, 192.168/16) y `*.local` (vLLM/LiteLLM en LAN); rechaza otros esquemas, credenciales en la URL, fragmentos y direcciones link-local; **no sigue redirecciones** (una 3xx se reporta como error) y la **key queda ligada a host:puerto** (cambiar de servidor invalida la key). Nunca preseleccionado y fuera del alcance de las herramientas del agente
+- **Validación de API keys**: al guardar (en segundo plano, sin bloquear) y con botón **Reintentar** — resultado `valida / rechazada (401, 403) / no verificable` con motivo claro (sin red, rate limit, timeout, sin catálogo, redirección…). OpenRouter se valida contra su endpoint autenticado `GET /key` (su `/models` es público); Z.ai (sin `/models`) queda "no verificable" con explicación; nunca al arrancar ni masivamente
+- **Filtro de texto** sobre el catálogo de modelos en Ajustes (id y nombre), con mensaje si no hay coincidencias — pensado para OpenRouter y sus 300+ entradas
+- **omit_params**: Moonshot omite `temperature` y `max_tokens` (muestreo fijo de kimi-k2); el payload de los demás proveedores queda idéntico (tests de regresión)
+- `stream_options.include_usage` con **reintento excepcional estricto**: si un proveedor lo rechaza con 400 mencionándolo, se reintentará una única vez sin él y se recuerda por proveedor — cualquier otro 400 sigue sin reintentarse
+
+**Añadido — Seguridad**
+- **Permisos del agente por workspace** con dos categorías (escritura / ejecución) e insignia ⚡ cuando hay permisos automáticos activos, revocables desde Ajustes
+- **Rutas protegidas siempre preguntan**, incluso con permiso concedido: `.git/`, `.github/`, `.vscode/`, `.env*`, `.husky/`, `.cargo/`, `.npmrc`, `.gitmodules` y `package.json` — con normalización que resuelve `..`, separadores y mayúsculas (`.GIT/config`, `src/../.git/config`, `.ENV.local`)
+- **Execute "safe" de superficie mínima**: solo git de lectura (status/diff/log/show/branch; branch con --list/-a/-v), pwd, whoami, hostname, date y echo — cat/ls/type/head/tail/wc/dir salieron de la allowlist (el agente usa `read_file`/`list_directory`/`search_files`, contenidas por Rust con `canonicalize`)
+- **Git también respeta las rutas protegidas**: `git show HEAD:.env`, `git show :.env`, `git log -p -- .env`, `git diff -- .env` y `git diff HEAD -- .git/config` piden confirmación (la forma `rev:ruta` y los pathspec tras `--` se analizan); los comodines en pathspec también
+- **Fail-closed total**: el HOME del usuario y las raíces de unidad **nunca se auto-aprueban** — ni con permisos guardados de antes, ni si el home aún no se resolvió; Ajustes explica por qué no se puede conceder
+- API keys: estados calculados en Rust con **un solo acceso al keychain** (error único i18n si falla), hint de últimos 4 caracteres **solo para keys de 12+ caracteres**, y la key jamás aparece en session.json, localStorage, logs ni respuestas de comandos (tests lo custodian)
+
+**Añadido — Productividad**
+- **Subagente `/ux` (UxBot 🎨)**: revisión de UI/UX con guía de diseño basada en un **motor BM25 en TypeScript** (port del proyecto open-source ui-ux-pro-max, MIT) sobre 7 dominios de conocimiento — mismo menú `/`, mismo formato de hallazgos
+- **Skills por lenguaje**: los subagentes reciben checklists adaptados al stack del proyecto (detección automática por extensiones y archivos raíz de Rust, Go, Python, Java, C#, Node y Web)
+- Menú de comandos `/` unificado (QA, Seguridad, Auditoría, UX) con avatares y navegación por teclado
+- **Sugerencias ante 401/403 de Moonshot**: aviso de usar el proveedor personalizado con `https://api.moonshot.cn/v1` si la key es de la plataforma china
+- Chat 401/403 con **mensaje claro + botón "Abrir Ajustes"** que aterriza en la tarjeta del proveedor afectado
+
+**Añadido — Marca y arranque**
+- **Identidad de marca**: logo Aether (SVG con gradiente, componente `AetherMark`), iconos de app regenerados en todos los tamaños, imágenes del instalador NSIS/WiX y favicon
+- **Pantalla de carga sin flash blanco**: la ventana nace oculta y se muestra al primer render, con placeholder de marca y respaldo de seguridad en Rust
+- **Barra lateral de terminales**: hasta 8 sesiones simultáneas con detección de shells (pwsh/PowerShell/cmd/Git Bash/WSL) y spawn diferido — la terminal solo nace al abrir el panel
+- Updater y git refresh diferidos a *idle* para acelerar el arranque
+
+**Corregido**
+- **Mojibake**: reparada la doble codificación de 90+ literales en el backend y el frontend; el repositorio entero pasa a estar verificado UTF-8 sin BOM
+- El chat con 401/403 muestra el cuerpo truncado del proveedor, el mensaje traducido y no toca el estado guardado de la key
+- Z.ai sin catálogo verificable: la lista estática se dejó vacía y Ajustes guía a escribir el ID del modelo a mano
+- Código muerto eliminado: comandos `create_chat`/`rename_chat` (Rust), módulo updater duplicado y 5 funciones sin uso; tooltips del chat pasados a i18n con **test de paridad ES/EN** (falla si un idioma pierde una clave)
+- Test de cableado de seguridad: ninguna herramienta del agente puede tocar keys ni la URL del proveedor personalizado
+
+**Tests**: 56 unitarios de Rust (claves/validación/estados, clasificación HTTP, serialización sin fugas, servidores locales simulados) + 7 suites de Node (permisos 97 checks, paridad i18n, cableado de keys, filtro de modelos 320 entradas, tracker de carreras, seguridad del agente, arranque)
+
+**Limitaciones conocidas** (diferidas)
+- Los checkpoints del Time Travel **no sobreviven a un reinicio** (viven en memoria) — persistencia en SQLite planeada para 0.4.1
+- Archivos UTF-16 no se abren (error visible) — detección de BOM planeada para 0.4.1
+- Sin backpressure en el PTY con salida masiva (el buffer intermedio mitiga la pérdida) — flow-control completo en 0.5.x
+- Los subagentes no reportan tokens reales (el endpoint de tool-calling aún no los expone) — planeado para 0.4.1
+- La aprobación automática de comandos es léxica: un symlink/junction dentro del workspace no se resuelve antes de aprobar (mitigado: la allowlist ya no incluye comandos que leen rutas)
 
 ### v0.3.1
 
