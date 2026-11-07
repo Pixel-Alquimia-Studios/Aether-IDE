@@ -42,10 +42,26 @@ if ($msi) {
     $failed = $true
 }
 
+Write-Output '[4] CSP compatible con Monaco/xterm (Lote H):'
+Write-Output '    (solo valida la CONFIGURACIÓN de tauri.conf.json, no el resultado compilado)'
+node (Join-Path $PSScriptRoot 'verify-csp.mjs')
+if ($LASTEXITCODE -ne 0) { $failed = $true }
+
 Write-Output ''
 if ($failed) {
-    Write-Output '== FALLO: faltan artefactos. Ejecuta "npm run tauri:build" y reintenta. =='
+    Write-Output '== FALLO: hay problemas. Corrígelos y vuelve a lanzar. =='
     exit 1
 }
 Write-Output '== OK: empaquetado de producción completo. =='
+Write-Output ''
+Write-Output '=== CHECKLIST MANUAL DEL RELEASE (build instalado) ==='
+Write-Output '  (a) Abrir un archivo de código: colores de sintaxis del tema Aether y'
+Write-Output '      números de línea GRIS alineados a la DERECHA (CSP de estilos OK).'
+Write-Output '  (b) Abrir la terminal (Ctrl+J): colores correctos y cursor visible'
+Write-Output '      (xterm inyecta CSS en runtime).'
+Write-Output '  (c) Abrir Ajustes y el chat: estilos correctos (Tailwind va en el bundle,'
+Write-Output '      pero valida el tema y los paneles).'
+Write-Output '  (d) Instalar NSIS y MSI: pantallas legibles — texto negro del asistente'
+Write-Output '      sobre blanco; arte de marca solo en la columna izquierda (MSI) y'
+Write-Output '      símbolo pequeño a la derecha del banner (MSI).'
 exit 0

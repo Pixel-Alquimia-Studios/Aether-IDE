@@ -23,7 +23,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost ws://localhost:1420; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https://open-vsx.org https://raw.githubusercontent.com; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 https://open-vsx.org"
+      "csp": "default-src 'self' ipc: http://ipc.localhost ws://localhost:1420; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https://open-vsx.org https://raw.githubusercontent.com; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 https://open-vsx.org",
+      "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
   "plugins": {
