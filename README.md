@@ -182,9 +182,13 @@ Release de **expansión y blindaje**: 5 proveedores nuevos + proveedor personali
 
 **Añadido — Marca y arranque**
 - **Identidad de marca**: logo Aether (SVG con gradiente, componente `AetherMark`), iconos de app regenerados en todos los tamaños, imágenes del instalador NSIS/WiX y favicon
-- **Pantalla de carga sin flash blanco**: la ventana nace oculta y se muestra al primer render, con placeholder de marca y respaldo de seguridad en Rust
+- **Pantalla de carga sin flash blanco**: la ventana nace oculta y se muestra al primer render, con placeholder de marca y respaldo de seguridad en Rust — con **duración mínima de 1 s** (`BOOT_MIN_MS`): el placeholder cubre toda la ventana, bloquea clics y atajos mientras es visible, y se retira al cumplirse el primer render **y** el mínimo (si el arranque tardó más, no se añade espera ninguna)
 - **Barra lateral de terminales**: hasta 8 sesiones simultáneas con detección de shells (pwsh/PowerShell/cmd/Git Bash/WSL) y spawn diferido — la terminal solo nace al abrir el panel
 - Updater y git refresh diferidos a *idle* para acelerar el arranque
+
+**Corregido — Producción** (detectados al instalar el build 0.4.0)
+- **Editor sin colores en el build instalado**: el `<style>` inline de la pantalla de arranque hacía que Tauri inyectara un hash en `style-src`, y por la especificación de CSP un solo nonce/hash **anula `'unsafe-inline'`** — los estilos que Monaco (tema, colores de token) y xterm (cursor) crean en runtime quedaban bloqueados. Arreglo mínimo: `dangerousDisableAssetCspModification: ["style-src"]` — `script-src` sigue recibiendo la protección de Tauri. En dev nunca se reprodujo (la CSP no se modifica sin compile). Nuevo `scripts/verify-csp.mjs` + paso `[4]` en `verify:release` con checklist manual del release
+- **Imágenes del MSI ilegibles**: el texto negro del asistente quedaba sobre el fondo oscuro del bitmap. Ahora el arte de marca vive **solo en la columna izquierda de 164 px** del diálogo (resto blanco liso), el banner lleva el símbolo pequeño pegado al borde derecho y el header NSIS el símbolo a la izquierda — símbolo centrado **sin deformar** (SVG anidado), BMP 24 bpp con tamaños exactos de la documentación (493×312, 493×58, 150×57, 164×314) y maquetas con el texto del asistente superpuesto en `.brand-previews/`
 
 **Corregido**
 - **Mojibake**: reparada la doble codificación de 90+ literales en el backend y el frontend; el repositorio entero pasa a estar verificado UTF-8 sin BOM
@@ -193,7 +197,7 @@ Release de **expansión y blindaje**: 5 proveedores nuevos + proveedor personali
 - Código muerto eliminado: comandos `create_chat`/`rename_chat` (Rust), módulo updater duplicado y 5 funciones sin uso; tooltips del chat pasados a i18n con **test de paridad ES/EN** (falla si un idioma pierde una clave)
 - Test de cableado de seguridad: ninguna herramienta del agente puede tocar keys ni la URL del proveedor personalizado
 
-**Tests**: 56 unitarios de Rust (claves/validación/estados, clasificación HTTP, serialización sin fugas, servidores locales simulados) + 7 suites de Node (permisos 97 checks, paridad i18n, cableado de keys, filtro de modelos 320 entradas, tracker de carreras, seguridad del agente, arranque)
+**Tests**: 56 unitarios de Rust (claves/validación/estados, clasificación HTTP, serialización sin fugas, servidores locales simulados) + 9 suites de Node (permisos 97 checks, paridad i18n, cableado de keys, filtro de modelos 320 entradas, tracker de carreras, seguridad del agente, arranque, duración mínima de carga, bitmaps del instalador) + verificador de CSP en el release
 
 **Limitaciones conocidas** (diferidas)
 - Los checkpoints del Time Travel **no sobreviven a un reinicio** (viven en memoria) — persistencia en SQLite planeada para 0.4.1
