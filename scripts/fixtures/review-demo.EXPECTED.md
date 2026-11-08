@@ -13,7 +13,7 @@ subagente. Comparar el bloque `aether-findings` contra este documento.
 | # | Archivo | Línea | Severidad esperada | Patrón |
 |---|---|---|---|---|
 | E1 | `src/api/files.ts` | 19 | critical | **Path traversal**: `path.join(cfg.uploadDir, name)` con `name` controlado por el usuario, sin `path.resolve` ni verificación de prefijo; `readFileSync` del resultado |
-| E2 | `src/api/stripe.ts` | 14 | critical | **Secreto hardcodeado**: `Bearer sk_live_…` en el código fuente |
+| E2 | `src/api/stripe.ts` | 14 | critical | **Secreto hardcodeado**: `Authorization: Bearer demo-secret-do-not-use-1234` con credencial embebida en el código fuente |
 | E3 | `src/components/UserProfile.tsx` | 13 | high | **useEffect con dependencias incompletas**: usa `userId` (línea 9) y las deps son `[]` → closure obsoleta con userId antiguo |
 | E4 | `src/lib/sync.ts` | 16-18 | high | **Promesa sin catch**: `startSync` hace `.then()` sin `.catch()` y `syncAll` lanza → unhandled rejection silenciosa |
 | E5 | `src/lib/sync.ts` | 31 | medium | **Edge case sin manejar**: `parseInt` sin radix y sin validar `NaN` — `pageOffset` produce `NaN` con `?page=abc` |

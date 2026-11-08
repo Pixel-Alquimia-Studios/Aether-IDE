@@ -11,7 +11,7 @@ export async function createCharge(charge: Charge): Promise<{ id: string }> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: "Bearer sk_live_51JqAeK9h3ZbV8xN2mQ7wL5pT",
+      Authorization: "Bearer demo-secret-do-not-use-1234",
     },
     body: JSON.stringify(charge),
   })
