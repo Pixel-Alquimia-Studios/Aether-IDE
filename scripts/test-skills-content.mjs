@@ -30,8 +30,36 @@ const ALL_FILES = [...AGENTS.map((f) => `agents/${f}`), ...SKILLS.map((f) => `sk
 const read = (rel) => fs.readFileSync(path.join(RES, rel), 'utf8')
 
 // Restauración en curso (Fase 1a/1b/1c): los archivos listados aquí ya fueron
-// restaurados y se les exigen sus secciones clave. Vacío al principio.
-const RESTORED_SECTIONS = {}
+// restaurados y se les exigen sus secciones clave. Se actualiza por fase.
+const RESTORED_SECTIONS = {
+  'agents/bugbot.md': [
+    'Proceso de revisión',
+    'Pre-Report Gate',
+    'requieren prueba',
+    'cero hallazgos',
+    'Formato del resumen',
+  ],
+  'skills/qa-checklist.md': [
+    'Checklist de revisión',
+    'CRITICAL',
+    'React',
+    'Node',
+    'Performance',
+    'falsos positivos',
+    'código generado por IA',
+    'aether-findings',
+  ],
+  'skills/typescript-patterns.md': [
+    'CRITICAL',
+    'type safety',
+    'async',
+    'manejo de errores',
+    'Node\\.js',
+    'React',
+    'performance',
+    'aether-findings',
+  ],
+}
 
 // ============ 1. Prohibidos: fallo directo ============
 console.log('== Prohibidos (fallo directo en todos los archivos) ==')
@@ -56,8 +84,6 @@ const TOOLS = [
   'mvn', 'tsc', 'prettier', 'vitest', 'jest', 'git diff --staged', 'git log --oneline',
 ]
 // Términos con límites de palabra: "tsconfig" NO es una mención de "tsc"
-const toolPattern = (tool) =>
-  new RegExp(`\\b${tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
 // Imperativo: verbo de ejecución INMEDIATAMENTE antes del término (con
 // artículos intermedios permitidos). "La llamada a la API corre sin X" NO lo es.
 const imperativeBefore = (text, idx) =>
@@ -65,7 +91,7 @@ const imperativeBefore = (text, idx) =>
     text.slice(Math.max(0, idx - 40), idx + 1),
   )
 // "usa X para validar/comprobar" en las cercanías del término
-const useForValidation = (text, idx, len) =>
+const looksLikeUseForValidation = (text, idx, len) =>
   /usa\s+\S+[^.\n]{0,40}\s+(?:para|to)\s+(?:validar|comprobar|check)/i.test(
     text.slice(Math.max(0, idx - 60), idx + len + 60),
   )
@@ -88,7 +114,7 @@ for (const rel of ALL_FILES) {
         const context = text.slice(from, to)
         const where = `${rel} (${tool})`
         const isImperative =
-          imperativeBefore(text, idx) || useForValidation(text, idx, needle.length)
+          imperativeBefore(text, idx) || looksLikeUseForValidation(text, idx, needle.length)
         if (isImperative) {
           fail(`${where}: contexto imperativo alrededor de la herramienta`, context.replace(/\n/g, ' ').slice(0, 160))
         } else if (STRONG_MARKER.test(context)) {

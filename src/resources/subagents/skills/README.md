@@ -42,6 +42,12 @@ languages: [python]        <- opcional (v0.4.0)
   resumir para ahorrar bytes. Lo único que se quita es lo que los subagentes no
   pueden hacer (comandos Bash, herramientas externas tipo mypy/go vet/mvn,
   "Prompt Defense Baseline", "Approval Criteria" y menciones a git diff).
+- **Tamaño y modelos locales**: los skills pueden ser largos, pero con modelos
+  locales de contexto corto (Ollama) el system prompt de un bot puede ocupar
+  una parte relevante de la ventana del modelo. Si usas Ollama, conviene subir
+  el contexto del modelo (`num_ctx`) para que el prompt y la conversación
+  quepan. El presupuesto por bot se verifica en
+  `scripts/test-skills-content.mjs` (tope: 6000 tokens estimados).
 - Los subagentes son de **solo lectura**: los skills no pueden pedir escribir
   archivos ni ejecutar comandos, y solo pueden referir a `read_file`,
   `search_files`, `list_directory` y `design_search`.
