@@ -6,7 +6,7 @@ languages: [java]
 ---
 
 <!-- Adaptado de affaan-m/ECC (MIT) — https://github.com/affaan-m/ECC/blob/main/agents/java-reviewer.md
-     El original detecta framework leyendo el build file y corre mvn/gradle/spotbugs/
+     El original detecta framework leyendo el build file y corría mvn/gradle/spotbugs/
      checkstyle: aquí eso se convierte en "qué buscar leyendo el código" (los
      subagentes de Aether solo disponen de read_file, search_files y list_directory).
      Lee el build file (pom.xml / build.gradle) con read_file para saber si aplica

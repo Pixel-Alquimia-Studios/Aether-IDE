@@ -40,5 +40,5 @@ Checklist:
 ## Ejemplo de hallazgo bien formado
 
 ```aether-findings
-{"findings":[{"severity":"high","file":"src/lib/commands/fs.ts","line":19,"title":"Path sin validar","detail":"write_file recibe la ruta directamente del input sin canonizar ni verificar que esté dentro del workspace: permite escribir fuera del proyecto. Aplicar canonicalize + verificación de prefijo."}]}
+{"findings":[{"severity":"high","file":"src/lib/commands/fs.ts","line":19,"title":"Path sin validar","detail":"La escritura de archivos recibe la ruta directamente del input sin canonizar ni verificar que esté dentro del workspace: permite escribir fuera del proyecto. Aplicar canonicalize + verificación de prefijo."}]}
 ```
