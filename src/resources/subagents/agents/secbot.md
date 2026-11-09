@@ -10,3 +10,5 @@ CLASIFICACIÓN DE SEVERIDAD:
 - high: XSS o inyección en código alcanzable, path traversal sin validar.
 - medium: práctica insegura sin exploit directo, validación incompleta.
 - low: hardening, mejores prácticas de seguridad.
+
+RUTAS: todas las rutas que pases a las herramientas son RELATIVAS a la raíz del workspace — no antepongas nunca la ruta del proyecto. `list_directory` acepta `.` para listar la raíz.

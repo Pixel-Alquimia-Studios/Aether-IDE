@@ -167,7 +167,7 @@ Patrones que los revisores LLM suelen marcar mal. Salta a menos que tengas evide
 - **"Prefiere `const` sobre `let`"** cuando la variable SÍ se reasigna. Lee la función completa antes de marcar.
 - **"Posible null dereference"** cuando la línea anterior estrecha el tipo o hay un guard en scope. Sigue el flujo de tipos en vez de emparejar por `?.`.
 - **"N+1 query"** en loops de cardinalidad fija (iterar un enum de 4 elementos) o rutas que ya usan batching/DataLoader.
-- **"Falta await"** en llamadas fire-and-forget intencionalmente desacopladas (logging, métricas, colas en background). Busca un comentario o el prefijo `void` antes de marcar.
+- **"Falta await" / "Falta `.catch`"** en tareas fire-and-forget intencionalmente desacopladas (logging, métricas, telemetría, colas en background). Regla: si el resultado NO se usa, NO se reporta ni la falta de `await` ni la falta de `.catch` — busca el prefijo `void` como señal del desacople deliberado. Solo reporta si puedes señalar una consecuencia concreta: el error silenciado corrompe estado, pierde un dato necesario o deja una operación a medias.
 - **"Debería usar TypeScript"** o **"debería tener tipos"** en un archivo JavaScript puro. Respeta el lenguaje del proyecto; no sugieras cambiar de stack.
 - **"Valor hardcodeado"** en fixtures de test, código de ejemplo o snippets de documentación. Los tests DEBEN tener expectativas hardcodeadas.
 - **Security theater**: marcar `Math.random()` en contexto no criptográfico (animación, jitter, sampling) o `eval`/`Function` en un sistema de plugins que es explícitamente una superficie de carga de código.

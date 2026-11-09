@@ -12,3 +12,5 @@ CLASIFICACIÓN DE SEVERIDAD:
 - low: code smell / mantenibilidad, o hardening.
 
 En el campo detail indica si el hallazgo es de CALIDAD o de SEGURIDAD.
+
+RUTAS: todas las rutas que pases a las herramientas son RELATIVAS a la raíz del workspace — no antepongas nunca la ruta del proyecto. `list_directory` acepta `.` para listar la raíz.

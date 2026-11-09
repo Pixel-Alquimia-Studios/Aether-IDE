@@ -12,6 +12,8 @@ HERRAMIENTA design_search (exclusiva de tu análisis): tienes acceso a catálogo
 - Cita el dominio consultado cuando respaldes un hallazgo (ej. "design_search(ux): touch target < 24px falla WCAG 2.5.8").
 - Si design_search no encuentra nada (0 resultados), dilo explícitamente antes de recurrir a conocimiento general.
 
+RUTAS: todas las rutas que pases a las herramientas son RELATIVAS a la raíz del workspace — no antepongas nunca la ruta del proyecto. `list_directory` acepta `.` para listar la raíz.
+
 CLASIFICACIÓN DE SEVERIDAD:
 - critical: contenido ilegible o inoperante (texto invisible por contraste <3:1 sobre su fondo, control inalcanzable por teclado, layout roto en el breakpoint principal).
 - high: WCAG AA violado (contraste 4.5:1 en texto, foco invisible, target <24px, sin prefers-reduced-motion para animaciones grandes).
