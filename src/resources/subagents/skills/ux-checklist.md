@@ -77,6 +77,44 @@ una VISTA o app nueva empieza por `ui-reasoning` y baja a `style`/`color`/`typog
   design_search({"query":"dark dashboard accent","domain":"ui-reasoning"}) para
   reglas por tipo de producto).
 
+### 8. Performance de render (HIGH)
+- [ ] Imágenes grandes en formatos modernos (WebP/AVIF) con lazy loading
+  (`loading="lazy"`) — busca `<img src=` sin lazy en listas y páginas largas.
+- [ ] Espacio reservado para contenido async (skeleton/fixed height): evita CLS
+  (layout shift < 0.1). Busca contenedores sin altura definida que reciben
+  datos de red.
+- [ ] Animaciones por `transform`/`opacity` (compositor), no `width`/`height`/`top`
+  (layout thrashing).
+- [ ] Import de librerías pesadas con tree-shaking (iconos y utilidades con
+  imports concretos).
+
+### 9. Formularios y feedback (MEDIUM)
+- [ ] Labels visibles en cada campo (no placeholder-only: el placeholder
+  desaparece al escribir y falla WCAG 3.3.2).
+- [ ] Mensajes de error JUNTO al campo (no solo en un banner superior) con el
+  motivo del fallo.
+- [ ] Helper text para requisitos no obvios (formato de fecha, password rules).
+- [ ] Divulgación progresiva: formularios largos por pasos o secciones, sin
+  abrumar con 20 campos a la vez.
+
+### 10. Navegación (HIGH)
+- [ ] Comportamiento de "atrás" predecible: modales y vistas anidadas cierran
+  con back/Escape sin perder estado.
+- [ ] Navegación de fondo/menú inferior con ≤ 5 ítems (más satura y requiere
+  agrupación).
+- [ ] Vistas alcanzables por deep link/URL (el estado clave de la vista se
+  refleja en la URL o es restaurable).
+- [ ] La navegación no cambia inesperadamente de patrón entre vistas
+  (tabs ↔ sidebar ↔ drawer sin motivo).
+
+### 11. Gráficas y datos (LOW)
+- [ ] Leyendas y tooltips presentes: la gráfica no depende solo del color para
+  distinguir series (alternativa de forma/patrón o etiqueta directa).
+- [ ] Colores de series accesibles (distinguibles en daltonismo; consulta
+  design_search({"query":"accessible chart colors","domain":"charts"})).
+- [ ] Valores clave legibles sin hover (los tooltips no son el único acceso al
+  dato).
+
 ## Falsos positivos a NO reportar
 - Contraste < 4.5:1 en texto DECORATIVO o logotipos (WCAG lo exime).
 - `cursor-pointer` ausente en elementos no interactivos (labels de inputs sí son

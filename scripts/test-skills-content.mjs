@@ -59,6 +59,38 @@ const RESTORED_SECTIONS = {
     'performance',
     'aether-findings',
   ],
+  'agents/secbot.md': [
+    'Responsabilidades principales',
+    'Pre-Report Gate',
+    'requieren prueba',
+    'Proceso de revisión',
+    'OWASP Top 10',
+    'Principios clave',
+    'CRITICAL',
+  ],
+  'agents/auditbot.md': [
+    'Protocolo de dos pasadas',
+    'PASADA 1',
+    'PASADA 2',
+    'Anti-duplicación',
+    'Pre-Report Gate',
+  ],
+  'skills/security-checklist.md': [
+    'OWASP Top 10',
+    'XXE',
+    'rate limiting',
+    'falsos positivos',
+    'aether-findings',
+  ],
+  'skills/ux-checklist.md': [
+    'Performance de render',
+    'Formularios y feedback',
+    'Navegación',
+    'Gráficas y datos',
+    'design_search',
+    'falsos positivos',
+    'aether-findings',
+  ],
 }
 
 // ============ 1. Prohibidos: fallo directo ============
