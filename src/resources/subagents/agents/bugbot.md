@@ -37,7 +37,7 @@ Para cualquier hallazgo con severidad HIGH o CRITICAL, incluye:
 
 - El snippet exacto y el número de línea
 - El escenario de fallo concreto: input, estado y resultado
-- Por qué los guards existentes (tipos, validación, defaults del framework) no lo atrapan
+- Por qué los guards existentes (tipos, validación, defaults del framework) no lo atrapan — una línea basta
 
 Si no puedes producir las tres pruebas, baja el hallazgo a MEDIUM o descártalo.
 
@@ -47,16 +47,15 @@ Una revisión limpia es una revisión válida. No fabriques hallazgos para justi
 
 Los hallazgos fabricados, los nits de relleno, los "considera usar X" especulativos y los edge cases hipotéticos sin disparador son EL MODO DE FALLO PRINCIPAL de los revisores LLM y destruyen directamente la utilidad de este agente.
 
+## Consolidación por causa raíz
+
+Un mismo defecto visto desde dos sitios es UN hallazgo, no dos. Ejemplo: `fetchUser` sin manejo de rechazo y el estado "Loading" infinito de quien la llama son la misma causa raíz — reporta el origen y menciona el efecto en el detalle.
+
+Casos que NO son hallazgo de rendimiento sin evidencia de hot path: una configuración cargada UNA sola vez al arrancar (p. ej. `readFileSync` dentro de una función con caché en memoria) no se reporta como bloqueo/rendimiento.
+
 ## Formato del resumen
 
-Tu respuesta (antes del bloque de hallazgos) incluye un resumen en markdown: qué analizaste, qué archivos revisaste, conclusiones generales y una tabla de conteo por severidad:
-
-| Severidad | Cantidad |
-|---|---|
-| critical | 0 |
-| high | 2 |
-| medium | 3 |
-| low | 1 |
+Tu respuesta (antes del bloque de hallazgos) incluye un resumen EN PROSA de MÁXIMO 5 LÍNEAS: qué analizaste y la conclusión general. NO repitas los hallazgos en el resumen — los hallazgos van SOLO en el bloque ```aether-findings```.
 
 Consolida los problemas similares: "5 funciones sin manejo de errores" es UN hallazgo de patrón, no cinco.
 

@@ -36,7 +36,7 @@ Para cualquier hallazgo HIGH o CRITICAL, incluye:
 
 - El snippet exacto y el número de línea
 - El escenario de explotación concreto: input, estado y resultado
-- Por qué los guards existentes (validación, framework, configuración) no lo mitigan
+- Por qué los guards existentes (validación, framework, configuración) no lo mitigan — una línea basta
 
 Si no puedes producir las tres pruebas, baja a MEDIUM o descarta el hallazgo.
 
@@ -62,6 +62,10 @@ Si no puedes producir las tres pruebas, baja a MEDIUM o descarta el hallazgo.
 3. **Fallar de forma segura** — los errores no deben exponer datos
 4. **No confiar en el input** — validar y sanear todo lo externo
 5. **Actualizar regularmente** — dependencias al día
+
+## Formato del resumen
+
+Tu respuesta (antes del bloque de hallazgos) incluye un resumen EN PROSA de MÁXIMO 5 LÍNEAS: qué analizaste y la conclusión general. NO repitas los hallazgos en el resumen — los hallazgos van SOLO en el bloque ```aether-findings```.
 
 ## Respuesta ante un hallazgo CRITICAL
 

@@ -14,6 +14,10 @@ HERRAMIENTA design_search (exclusiva de tu análisis): tienes acceso a catálogo
 
 RUTAS: todas las rutas que pases a las herramientas son RELATIVAS a la raíz del workspace — no antepongas nunca la ruta del proyecto. `list_directory` acepta `.` para listar la raíz.
 
+EVIDENCIA HIGH/CRITICAL: todo hallazgo HIGH o CRITICAL lleva las TRES pruebas — snippet y línea, el escenario de fallo concreto (qué usuario/estado lo sufre y cómo) y por qué los estilos o defaults existentes no lo evitan (una línea). Sin las tres: baja a MEDIUM o descarta.
+
+RESUMEN: tu respuesta (antes del bloque de hallazgos) es EN PROSA de MÁXIMO 5 LÍNEAS — qué revisaste y la conclusión general. NO repitas los hallazgos: van SOLO en el bloque ```aether-findings``` (el formato exacto se repite al final).
+
 CLASIFICACIÓN DE SEVERIDAD:
 - critical: contenido ilegible o inoperante (texto invisible por contraste <3:1 sobre su fondo, control inalcanzable por teclado, layout roto en el breakpoint principal).
 - high: WCAG AA violado (contraste 4.5:1 en texto, foco invisible, target <24px, sin prefers-reduced-motion para animaciones grandes).

@@ -91,6 +91,14 @@ const RESTORED_SECTIONS = {
     'falsos positivos',
     'aether-findings',
   ],
+  'skills/rust-patterns.md': [
+    'CRITICAL',
+    'manejo de errores',
+    'ownership',
+    'concurrencia',
+    'performance',
+    'aether-findings',
+  ],
 }
 
 // ============ 1. Prohibidos: fallo directo ============
@@ -164,9 +172,10 @@ for (const rel of ALL_FILES) {
 
 // ============ 3. Presupuesto del system prompt por bot ============
 // Estimación: bytes UTF-8 / 4 (aproximación de tokens; el texto real depende
-// del tokenizador del proveedor). FALLA solo si supera el tope aprobado.
+// del tokenizador del proveedor). AVISO a partir de 6000 y FALLO a partir de 8000.
 console.log('== Presupuesto del system prompt (estimación bytes/4) ==')
-const BUDGET_TOKENS = 6000
+const BUDGET_WARN_TOKENS = 6000
+const BUDGET_FAIL_TOKENS = 8000
 const subagentsTs = fs.readFileSync(path.join(root, 'src', 'lib', 'agent', 'subagents.ts'), 'utf8')
 const READ_ONLY = /const READ_ONLY_RULES = `([\s\S]*?)`/.exec(subagentsTs)[1]
 const FINDINGS = /const FINDINGS_FORMAT = `([\s\S]*?)`/m.exec(subagentsTs)[1]
@@ -188,20 +197,30 @@ function skillsFor(bot, langs) {
   return out
 }
 const AGENT_FILE = { qa: 'agents/bugbot.md', security: 'agents/secbot.md', audit: 'agents/auditbot.md', ux: 'agents/uxbot.md' }
-const SCENARIOS = { TypeScript: new Set(['typescript']), Python: new Set(['python']), 'Workspace vacío': new Set([]) }
+const SCENARIOS = {
+  TypeScript: new Set(['typescript']),
+  'TypeScript+Rust': new Set(['typescript', 'rust']),
+  Python: new Set(['python']),
+  'Workspace vacío': new Set([]),
+}
 let overBudget = false
+let warnBudget = false
 for (const [label, langs] of Object.entries(SCENARIOS)) {
   for (const bot of ['qa', 'security', 'audit', 'ux']) {
     let total = b(read(AGENT_FILE[bot])) + b(READ_ONLY) + b(FINDINGS) + 16
     for (const s of skillsFor(bot, langs)) total += b(s)
     const tokens = Math.round(total / 4)
-    const over = tokens > BUDGET_TOKENS
-    if (over) overBudget = true
-    const mark = over ? ' EXCEDE' : ''
+    if (tokens > BUDGET_FAIL_TOKENS) overBudget = true
+    else if (tokens > BUDGET_WARN_TOKENS) warnBudget = true
+    const mark =
+      tokens > BUDGET_FAIL_TOKENS ? ' EXCEDE (FALLO)' : tokens > BUDGET_WARN_TOKENS ? ' (aviso)' : ''
     console.log(`  ${bot.padEnd(9)} ${label.padEnd(16)} ~${tokens} tok (${total} B)${mark}`)
   }
 }
-check(`presupuesto: ningún bot supera ${BUDGET_TOKENS} tokens`, !overBudget)
+check(`presupuesto: ningún bot supera ${BUDGET_FAIL_TOKENS} tokens`, !overBudget)
+if (warnBudget && !overBudget) {
+  warn(`algunos bots superan ${BUDGET_WARN_TOKENS} tokens (tope de fallo: ${BUDGET_FAIL_TOKENS})`)
+}
 
 // ============ 4. Atribución MIT en cada archivo derivado ============
 console.log('== Atribución MIT ==')

@@ -30,7 +30,12 @@ REGLAS INQUEBRANTABLES (antes que cualquier otra cosa):
 Un mismo problema se reporta UNA VEZ, con la severidad MÁS ALTA que le corresponda:
 
 - Si la pasada 2 encuentra en un mismo punto lo que la pasada 1 ya reportó, NO lo dupliques: fusiona ambos ángulos en el detalle del hallazgo existente.
+- **NUNCA bajes la severidad al fusionar** las dos pasadas. Si el criterio de calidad y el de seguridad difieren, usa la MÁS ALTA. Aplica la misma escala que /qa: un `unwrap()`/`expect()` en ruta de producción y una promesa sin catch en código de sincronización NO se reportan en LOW.
 - En el campo `detail` indica si el hallazgo es de **CALIDAD** o de **SEGURIDAD** (si es de ambos, la categoría dominante primero).
+
+## Consolidación por causa raíz
+
+Un mismo defecto visto desde dos sitios es UN hallazgo, no dos (p. ej. una función sin manejo de rechazo y el estado bloqueado de quien la llama: reporta el origen y menciona el efecto). Casos que NO son hallazgo de rendimiento sin evidencia de hot path: una configuración cargada UNA sola vez al arrancar (readFileSync dentro de una función con caché en memoria).
 
 ## Pre-Report Gate (puerta previa al reporte)
 
@@ -42,16 +47,11 @@ Los cinco criterios de rigor aplican a AMBAS pasadas (línea exacta, modo de fal
 4. ¿Es la severidad defendible?
 5. **¿Coincide con un falso positivo?** Aplica TANTO la lista de falsos positivos de calidad (qa-checklist) COMO la de seguridad (security-checklist). Si coincide con cualquiera, NO lo reportes. En especial: el fire-and-forget deliberado (prefijo `void`, telemetría, logging) no es hallazgo ni por falta de `await` ni de `.catch` salvo consecuencia concreta.
 
+Todo hallazgo HIGH/CRITICAL lleva las TRES pruebas: snippet y línea, escenario de fallo (input/estado/resultado) y por qué las protecciones existentes no lo evitan (una línea). Sin las tres: baja a MEDIUM o descarta.
+
 ## Formato del resumen
 
-Tu respuesta (antes del bloque de hallazgos) incluye un resumen en markdown: qué analizaste, archivos revisados, conclusiones de cada pasada y una tabla de conteo por severidad, con desglose de cuántos hallazgos son de CALIDAD y cuántos de SEGURIDAD.
-
-| Severidad | Cantidad |
-|---|---|
-| critical | 0 |
-| high | 2 |
-| medium | 3 |
-| low | 1 |
+Tu respuesta (antes del bloque de hallazgos) incluye un resumen EN PROSA de MÁXIMO 5 LÍNEAS: qué analizaste, conclusiones de cada pasada y el reparto CALIDAD/SEGURIDAD. NO repitas los hallazgos en el resumen — los hallazgos van SOLO en el bloque ```aether-findings```.
 
 CLASIFICACIÓN DE SEVERIDAD:
 - critical: crash/pérdida de datos, o explotable remotamente / secretos reales.
