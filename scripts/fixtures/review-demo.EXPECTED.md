@@ -26,13 +26,23 @@ Severidad aceptable: E1/E2 critical (high se considera fallo parcial); E3/E4/E6 
 
 | # | Ubicación | Qué es | Falso positivo típico que debe evitarse |
 |---|---|---|---|
-| T1 | `src/api/config.ts` (todo el archivo) | `loadConfig` lanza sin catch local, pero su llamador `handleUploadStatus` (files.ts:7-17) lo envuelve en `try/catch` | "Falta manejo de errores en loadConfig" / "readFileSync puede lanzar" |
+| T1 | `src/api/config.ts` (todo el archivo) | `loadConfig` lanza sin catch local, pero su llamador `handleUploadStatus` (files.ts:7-17) lo envuelve en `try/catch` | "Falta manejo de errores en loadConfig" / "readFileSync puede lanzar" / "lectura síncrona bloqueante" como rendimiento |
 | T2 | `src/lib/sync.ts` | 22 | `if (response.status === 404)` | "Número mágico 404" — código de estado HTTP conocido |
-| T3 | `src/components/UserProfile.tsx` | 16 | `void track(...)` — telemetría fire-and-forget deliberada | "Falta await / promesa flotante" (el prefijo `void` marca el desacople intencional) |
+| T3 | `src/components/UserProfile.tsx` | 16 | `void track(...)` — telemetría fire-and-forget deliberada | "Falta await / promesa flotante / falta .catch" (el prefijo `void` marca el desacople intencional) |
 
-Nota T1: `readFileForUser` (files.ts:19-21) NO envuelve a `loadConfig`; si se reporta
-ese punto concreto como edge case real, es válido — la trampa es reportar **config.ts**
-por el flujo de `handleUploadStatus`.
+### Qué debe pasar exactamente con T1 (config.ts)
+
+- **NO** se reporta nada de `loadConfig` por el flujo de `handleUploadStatus`
+  (files.ts:7-17): el llamador envuelve la llamada en `try/catch` y maneja
+  `ENOENT` — el error ya está manejado un nivel arriba.
+- **SÍ es válido** reportar `readFileForUser` (files.ts:19-21): ahí la llamada a
+  `loadConfig()`/`readFileSync` NO está envuelta — un edge case real de
+  propagación de error es hallazgo legítimo.
+- **NO es válido** reportar la lectura síncrona (`readFileSync`) de `config.ts`
+  como problema de RENDIMIENTO: se carga una sola vez al arrancar con caché en
+  memoria (`cached`); sin evidencia de hot path no hay hallazgo de rendimiento.
+- Si `loadConfig` se reporta con severidad LOW solo como nota informativa de
+  robustez, cuenta como **falso positivo igualmente** (el llamador maneja).
 
 ## Criterio de evaluación
 

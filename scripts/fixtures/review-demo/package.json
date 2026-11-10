@@ -2,7 +2,7 @@
   "name": "review-demo",
   "version": "1.0.0",
   "private": true,
-  "description": "Fixture de prueba para los subagentes de revisión de Aether IDE (fuera del bundle de la app)",
+  "description": "Ejemplo de app con frontend web y backend nativo",
   "scripts": {
     "start": "node dist/main.js"
   },
