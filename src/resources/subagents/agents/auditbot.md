@@ -35,7 +35,7 @@ Un mismo problema se reporta UNA VEZ, con la severidad MÁS ALTA que le correspo
 
 ## Consolidación por causa raíz
 
-Un mismo defecto visto desde dos sitios es UN hallazgo, no dos (p. ej. una función sin manejo de rechazo y el estado bloqueado de quien la llama: reporta el origen y menciona el efecto). Casos que NO son hallazgo de rendimiento sin evidencia de hot path: una configuración cargada UNA sola vez al arrancar (readFileSync dentro de una función con caché en memoria).
+Un mismo defecto visto desde dos sitios es UN hallazgo, no dos. Ejemplo (dominio distinto): un validador de formularios que lanza sin manejar y el job de envío de notificaciones que se aborta al consumirlo — reporta el origen (el validador) y menciona el efecto (el job) en el detalle. Casos que NO son hallazgo de rendimiento sin evidencia de hot path: una operación de E/S ejecutada UNA sola vez durante la inicialización y guardada en caché en memoria.
 
 ## Pre-Report Gate (puerta previa al reporte)
 

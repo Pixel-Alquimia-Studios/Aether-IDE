@@ -49,9 +49,9 @@ Los hallazgos fabricados, los nits de relleno, los "considera usar X" especulati
 
 ## Consolidación por causa raíz
 
-Un mismo defecto visto desde dos sitios es UN hallazgo, no dos. Ejemplo: `fetchUser` sin manejo de rechazo y el estado "Loading" infinito de quien la llama son la misma causa raíz — reporta el origen y menciona el efecto en el detalle.
+Un mismo defecto visto desde dos sitios es UN hallazgo, no dos. Ejemplo (dominio distinto): un parser de fechas que lanza sin manejar y el job nocturno de facturación que se detiene al usarlo son la misma causa raíz — reporta el origen (el parser) y menciona el efecto (el job) en el detalle.
 
-Casos que NO son hallazgo de rendimiento sin evidencia de hot path: una configuración cargada UNA sola vez al arrancar (p. ej. `readFileSync` dentro de una función con caché en memoria) no se reporta como bloqueo/rendimiento.
+Casos que NO son hallazgo de rendimiento sin evidencia de hot path: una operación de E/S ejecutada UNA sola vez durante la inicialización y guardada en caché en memoria no se reporta como bloqueo o lentitud.
 
 ## Formato del resumen
 

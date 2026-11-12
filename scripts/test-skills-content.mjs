@@ -117,6 +117,31 @@ for (const rel of ALL_FILES) {
   }
 }
 
+// ============ 1b. Sin identificadores del proyecto de prueba (anti-sobreajuste) ============
+// Los ejemplos de skills y prompts no deben copiar los nombres del fixture
+// review-demo: los principios van genéricos, no calzados a un caso concreto.
+console.log('== Sin identificadores del fixture review-demo ==')
+const FIXTURE_IDENTIFIERS = [
+  'review-demo',
+  'fetchUser',
+  'UserProfile',
+  'loadConfig',
+  'handleUploadStatus',
+  'readFileForUser',
+  'startSync',
+  'parsePageNumber',
+  'pageOffset',
+  'demo-secret',
+]
+for (const rel of ALL_FILES) {
+  const text = read(rel)
+  for (const id of FIXTURE_IDENTIFIERS) {
+    if (text.toLowerCase().includes(id.toLowerCase())) {
+      fail(`${rel}: contiene el identificador del fixture "${id}"`)
+    }
+  }
+}
+
 // ============ 2. Términos-herramienta: analogía vs imperativo ============
 console.log('== Menciones de herramientas (criterio de lectura, no órdenes) ==')
 const TOOLS = [
