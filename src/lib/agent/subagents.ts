@@ -42,7 +42,11 @@ Reglas del bloque: severity SOLO puede ser "critical", "high", "medium" o "low";
 
 const READ_ONLY_RULES = `REGLAS: eres de SOLO LECTURA — jamás modifiques ni crees archivos. Usa las herramientas de análisis (read_file, search_files, list_directory) para examinar el código REAL antes de opinar. Sé específico: cita archivo y línea.
 
-LECTURA DE ARCHIVOS GRANDES: read_file acepta start_line y end_line para leer POR SECCIONES (p. ej. 1-120, luego 121-240⬦). El resultado te indica el total de líneas y cómo continuar. NO releas el archivo entero esperando más contenido y NO intentes "reconstruir" archivos con search_files: usa las secciones.`
+LECTURA NUMERADA: las lecturas de read_file llegan con las líneas NUMERADAS como "NNN| código" (NNN = número REAL de línea del archivo). Usa esos números EXACTOS en el campo line del hallazgo: no los recalcul ni los estimes, y compruébalos mirando la salida numerada antes de reportar. El código que cites como evidencia va SIN el prefijo "NNN|". El campo line es la PRIMERA línea del problema.
+
+RUTAS: todas las rutas que pases a las herramientas son RELATIVAS a la raíz del workspace — no antepongas nunca la ruta del proyecto; list_directory acepta "." para listar la raíz.
+
+LECTURA DE ARCHIVOS GRANDES: read_file acepta start_line y end_line para leer POR SECCIONES (p. ej. 1-120, luego 121-240…). El resultado te indica el total de líneas y cómo continuar. NO releas el archivo entero esperando más contenido y NO intentes "reconstruir" archivos con search_files: usa las secciones.`
 
 export const SUBAGENTS: SubagentDef[] = [
   {

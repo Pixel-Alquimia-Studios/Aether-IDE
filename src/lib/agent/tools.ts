@@ -1,5 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 
+import { numberLines } from '@/lib/agent/lineNumbers'
+import { formatDisplayPath, resolvePath } from '@/lib/workspace/format'
 import { searchUx } from '@/lib/agent/uxData'
 import { evaluatePermission } from '@/lib/agent/permissions'
 import { useAgentStore } from '@/stores/agentStore'
@@ -102,13 +104,21 @@ export const AGENT_TOOLS: ToolDef[] = [
   },
 ]
 
-function resolvePath(path: string, root: string): string {
-  if (!path || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('/')) return path
-  return `${root.replace(/[\\/]+$/, '')}/${path}`
-}
-
 function truncateOutput(s: string): string {
   return s.length > MAX_OUTPUT_CHARS ? `${s.slice(0, MAX_OUTPUT_CHARS)}\n… (truncado — usa las herramientas de búsqueda o lectura por secciones para ver más)` : s
+}
+
+/**
+ * Enriquece los errores de ruta de las herramientas de análisis: recuerda que
+ * las rutas van RELATIVAS a la raíz del workspace y que "." es la raíz.
+ * Solo muestra la raíz actual (sin prefijo \\?\) — sin secretos ni rutas de
+ * otros sitios.
+ */
+function pathError(err: unknown, workspaceRoot: string): Error {
+  const message = err instanceof Error ? err.message : String(err)
+  return new Error(
+    `${message}\nNOTA: las rutas son RELATIVAS a la raíz del workspace (${formatDisplayPath(workspaceRoot)}) — usa "." para listar la raíz.`,
+  )
 }
 
 const FULL_READ_LIMIT = 16000
@@ -167,27 +177,39 @@ export async function runTool(
             endLine: endLine ?? (startLine ?? 1) + SECTION_LINES - 1,
           })
           const hasMore = range.endLine < range.totalLines
+          // Subagentes (readOnly): contenido NUMERADO con los números reales
+          // del archivo para citar líneas exactas; el Modo Agente recibe el
+          // contenido crudo (nunca ve números que luego podría reescribir)
+          const body = readOnly
+            ? numberLines(range.content, range.startLine, range.totalLines)
+            : range.content
           return [
             `[${path} — ${range.totalLines} líneas totales — mostrando ${range.startLine}-${range.endLine}${hasMore ? ` — HAY MÁS: usa start_line=${range.endLine + 1}, end_line=${Math.min(range.endLine + SECTION_LINES, range.totalLines)}` : ' — fin del archivo'}]`,
-            range.content,
+            body,
           ].join('\n')
         }
 
         // Lectura completa: si el archivo es grande, devuelve la primera
         // sección con hint en vez de truncar a ciegas
-        const content = await invoke<string>('read_file', { path })
+        const content = await invoke<string>('read_file', { path }).catch((e) => {
+          throw pathError(e, workspaceRoot)
+        })
         if (content.length > FULL_READ_LIMIT) {
           const range = await invoke<{
             content: string
             totalLines: number
+            startLine: number
             endLine: number
           }>('read_file_range', { path, startLine: 1, endLine: SECTION_LINES })
+          const body = readOnly
+            ? numberLines(range.content, range.startLine, range.totalLines)
+            : range.content
           return [
             `[${path} — ${range.totalLines} líneas totales — mostrando 1-${range.endLine} — HAY MÁS: usa start_line=${range.endLine + 1}, end_line=${Math.min(range.endLine + SECTION_LINES, range.totalLines)} para continuar (no intentes "reconstruir" el archivo con search_files)]`,
-            range.content,
+            body,
           ].join('\n')
         }
-        return content
+        return readOnly ? numberLines(content, 1, content.split('\n').length) : content
       }
       case 'search_files': {
         const hits = await invoke<Array<{ path: string; lineNumber: number; text: string }>>(
@@ -196,17 +218,26 @@ export async function runTool(
         )
         if (hits.length === 0) return 'Sin resultados.'
         return truncateOutput(
-          hits.map((h) => `${h.path}:${h.lineNumber}: ${h.text}`).join('\n'),
+          hits
+            .map((h) => `${formatDisplayPath(h.path)}:${h.lineNumber}: ${h.text}`)
+            .join('\n'),
         )
       }
       case 'list_directory': {
-        const path = args.path ? resolvePath(String(args.path), workspaceRoot) : workspaceRoot
+        const path = resolvePath(String(args.path ?? ''), workspaceRoot)
         const tree = await invoke<Array<{ path: string; name: string; kind: string }>>('read_dir', {
           path,
+        }).catch((e) => {
+          throw pathError(e, workspaceRoot)
         })
         if (tree.length === 0) return 'Directorio vacío.'
         return truncateOutput(
-          tree.map((n) => `${n.kind === 'directory' ? '[dir]  ' : '       '}${n.path}`).join('\n'),
+          tree
+            .map(
+              (n) =>
+                `${n.kind === 'directory' ? '[dir]  ' : '       '}${formatDisplayPath(n.path)}`,
+            )
+            .join('\n'),
         )
       }
       case 'design_search': {
