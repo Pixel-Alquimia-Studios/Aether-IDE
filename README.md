@@ -8,7 +8,7 @@
 
 React + TypeScript · Rust (Tauri v2) · Monaco Editor
 
-[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.4.0-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
+[![Descargas](https://img.shields.io/badge/⬇_Descargas-v0.4.1-blue)](#-descargas) [![Licencia](https://img.shields.io/badge/Licencia-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
