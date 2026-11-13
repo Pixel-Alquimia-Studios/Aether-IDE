@@ -1,4 +1,5 @@
 import { getEditorInstance } from '@/lib/monaco/editorRef'
+import { formatDisplayPath } from '@/lib/workspace/format'
 import { useEditorStore } from '@/stores/editorStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 import type { FileNode } from '@/types/workspace'
@@ -48,13 +49,13 @@ export async function resolveMentions(mentions: MentionContext[]): Promise<Conte
     if (mention.kind === 'file' && mention.path) {
       try {
         const content = await useWorkspaceStore.getState().readFile(mention.path)
-        fragments.push({ label: mention.path, content: truncateContext(content) })
+        fragments.push({ label: formatDisplayPath(mention.path), content: truncateContext(content) })
       } catch {
         // Archivo ilegible o inexistente: se omite
       }
     } else if (mention.kind === 'current') {
       const ctx = getActiveEditorContext()
-      if (ctx) fragments.push({ label: `${ctx.path} (actual)`, content: ctx.content })
+      if (ctx) fragments.push({ label: `${formatDisplayPath(ctx.path)} (actual)`, content: ctx.content })
     } else if (mention.kind === 'codebase') {
       fragments.push({ label: 'codebase (estructura)', content: buildWorkspaceTreeSummary() })
     }
@@ -69,7 +70,7 @@ export function buildContextBlock(
 ): string {
   const parts: string[] = []
   if (current) {
-    parts.push(`[Archivo actual: ${current.path}]\n${current.content}`)
+    parts.push(`[Archivo actual: ${formatDisplayPath(current.path)}]\n${current.content}`)
   }
   for (const fragment of fragments) {
     parts.push(`[Contexto: ${fragment.label}]\n${fragment.content}`)

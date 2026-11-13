@@ -1,3 +1,4 @@
+import { formatDisplayPath } from '@/lib/workspace/format'
 import type { AgentFinding } from '@/types/agent'
 
 const SEVERITY_STYLES: Record<
@@ -86,7 +87,7 @@ export function FindingsReport({
               </p>
               {(finding.file || finding.line != null) && (
                 <p className="mt-1 truncate font-mono text-[10px] text-aether-text-dim">
-                  📄 {finding.file ?? '?'}
+                  📄 {finding.file ? formatDisplayPath(finding.file) : '?'}
                   {finding.line != null ? `:${finding.line}` : ''}
                 </p>
               )}

@@ -10,6 +10,7 @@ import type { ChatCommand } from '@/lib/agent/commands'
 import { detectSubagent, SUBAGENTS } from '@/lib/agent/subagents'
 import { fuzzyScore } from '@/lib/commands/fuzzy'
 import { useT } from '@/lib/i18n'
+import { formatDisplayPath } from '@/lib/workspace/format'
 import { useAgentStore } from '@/stores/agentStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useEditorStore } from '@/stores/editorStore'
@@ -752,7 +753,7 @@ const openSettings = useUiStore((s) => s.openSettings)
             {pendingApproval.kind === 'write_file' ? (
               <>
                 <p className="mt-1 break-all font-mono text-[11px] text-aether-text">
-                  {pendingApproval.path}
+                  {formatDisplayPath(pendingApproval.path)}
                 </p>
                 <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-aether-bg px-2 py-1.5 font-mono text-[11px] leading-relaxed text-aether-text-dim">
                   {pendingApproval.content}

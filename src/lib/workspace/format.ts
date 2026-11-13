@@ -14,8 +14,8 @@
  * rollback siguen usando la cadena original). Rust aplica la contención
  * real con canonicalize, no con esta función.
  */
-export function formatDisplayPath(p: string): string {
-  if (!p) return p
+export function formatDisplayPath(p: string | undefined | null): string {
+  if (!p) return p ?? ''
   if (p.startsWith('\\\\?\\UNC\\')) return '\\' + p.slice(7)
   if (p.startsWith('\\\\?\\')) return p.slice(4)
   return p
