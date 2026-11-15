@@ -201,6 +201,8 @@ const en = {
   'chat.authRejected':
     'Provider {nombre} rejected authentication (HTTP {codigo}). Check your API key and the model permissions.',
   'chat.openSettings': 'Open Settings',
+  'findings.unverified':
+    'The subagent read no files; this result is not a reliable review.',
   // Tooltips y textos del chat (Lote G: fuera del hardcode)
   'chat.editResendTitle': 'Edit and resend (reverts later changes)',
   'chat.deleteRevertTitle': 'Delete (reverts agent changes from here)',
@@ -449,6 +451,8 @@ const es: Record<TranslationKey, string> = {
   'chat.authRejected':
     'El proveedor {nombre} rechazó la autenticación (HTTP {codigo}). Revisa tu API key y los permisos del modelo.',
   'chat.openSettings': 'Abrir Ajustes',
+  'findings.unverified':
+    'El subagente no leyó ningún archivo; este resultado no es una revisión fiable.',
   // Tooltips y textos del chat (Lote G: fuera del hardcode)
   'chat.editResendTitle': 'Editar y reenviar (revierte los cambios posteriores)',
   'chat.deleteRevertTitle': 'Eliminar (revierte los cambios del agente desde aquí)',

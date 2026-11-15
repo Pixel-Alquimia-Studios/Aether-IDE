@@ -199,6 +199,10 @@ export const useAgentStore = create<AgentState>()((set) => ({
     ]
 
     try {
+      // 0.4.1-B: lecturas reales del subagente (read_file/read_file_range/
+      // search_files) — un reporte SIN lecturas no es una revisión fiable
+      const READ_COUNTING_TOOLS = new Set(['read_file', 'search_files'])
+      let readCalls = 0
       for (let step = 0; step < maxSteps; step++) {
         // Fase E: el botón Detener corta el bucle en el siguiente paso
         if (useAgentStore.getState().stopRequested) {
@@ -276,11 +280,14 @@ export const useAgentStore = create<AgentState>()((set) => ({
                 ts: reportTs,
                 botName: subagent?.botName,
               },
-              ...(findings && findings.length > 0
+              // Tarjeta de reporte SIEMPRE en subagentes (incluso con 0
+              // hallazgos): FindingsReport avisa cuando hubo CERO lecturas
+              ...(subagent
                 ? [
                     {
                       type: 'report' as const,
-                      findings,
+                      findings: findings ?? [],
+                      unverified: readCalls === 0,
                       turnId: turn,
                       ts: reportTs + 1,
                       botName: subagent?.botName,
@@ -332,6 +339,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
           }))
           // M3: los subagentes de análisis son de solo lectura — hard-deny
           const output = await runTool(call, workspaceRoot, turn, !!subagent)
+          if (subagent && READ_COUNTING_TOOLS.has(call.name)) readCalls++
           // Persist inmediato: los writes aprobados sobreviven a un reload
           void useChatStore.getState().persistActive()
           set((state) => {

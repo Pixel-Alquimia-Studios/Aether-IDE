@@ -1,4 +1,5 @@
 import { formatDisplayPath } from '@/lib/workspace/format'
+import { useT } from '@/lib/i18n'
 import type { AgentFinding } from '@/types/agent'
 
 const SEVERITY_STYLES: Record<
@@ -36,10 +37,14 @@ const SEVERITY_ORDER: Array<AgentFinding['severity']> = ['critical', 'high', 'me
 export function FindingsReport({
   findings,
   botName,
+  unverified,
 }: {
   findings: AgentFinding[]
   botName?: string
+  /** El subagente terminó sin leer ningún archivo: el reporte no es fiable */
+  unverified?: boolean
 }) {
+  const t = useT()
   const counts = SEVERITY_ORDER.map((severity) => ({
     severity,
     count: findings.filter((f) => f.severity === severity).length,
@@ -56,14 +61,21 @@ export function FindingsReport({
         <span className="text-[11px] font-semibold tracking-wider text-aether-text-dim uppercase">
           {botName ? `${botName} · reporte de hallazgos` : 'Reporte de hallazgos'}
         </span>
-        {counts.map((c) => (
-          <span
-            key={c.severity}
-            className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${SEVERITY_STYLES[c.severity].badge}`}
-          >
-            {c.count} {SEVERITY_STYLES[c.severity].label}
+        {/* Sin lecturas: aviso EN VEZ del recuento de severidades */}
+        {unverified ? (
+          <span className="inline-flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+            ⚠ {t('findings.unverified')}
           </span>
-        ))}
+        ) : (
+          counts.map((c) => (
+            <span
+              key={c.severity}
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${SEVERITY_STYLES[c.severity].badge}`}
+            >
+              {c.count} {SEVERITY_STYLES[c.severity].label}
+            </span>
+          ))
+        )}
       </div>
 
       <div className="space-y-2">

@@ -254,6 +254,31 @@ for (const rel of ALL_FILES) {
   if (!/MIT/i.test(text)) fail(`${rel}: sin atribución MIT`)
 }
 
+// ============ 4b. Aviso de reporte sin lecturas (0.4.1-B ajuste) ============
+console.log('== Aviso de reporte sin lecturas ==')
+const i18n = fs.readFileSync(path.join(root, 'src/lib/i18n.ts'), 'utf8')
+// La REGLA de alcance va UNA sola vez en READ_ONLY_RULES y sin copiar en agents
+const scopeCount = (subagentsTs.match(/nunca concluyas/g) || []).length
+check('regla de alcance presente UNA vez en READ_ONLY_RULES', scopeCount === 1, `${scopeCount} veces`)
+const agentsWithScopeRule = AGENTS.filter((f) => read(`agents/${f}`).includes('nunca concluyas'))
+check('la regla de alcance NO se copia en agents/*.md', agentsWithScopeRule.length === 0, agentsWithScopeRule.join(', '))
+// Los 3 bots condicionan el "cero hallazgos" a haber leído el código
+for (const f of ['bugbot.md', 'secbot.md', 'auditbot.md']) {
+  check(`${f}: cero hallazgos condicionado a lecturas`, read(`agents/${f}`).includes('después de haber leído el código'))
+}
+// El contador de lecturas y el flag del step en el bucle
+const agentStore = fs.readFileSync(path.join(root, 'src/stores/agentStore.ts'), 'utf8')
+check(
+  'agentStore cuenta las lecturas del subagente',
+  /READ_COUNTING_TOOLS\.has\(call\.name\)\) readCalls\+\+/.test(agentStore),
+)
+check(
+  'agentStore marca unverified cuando readCalls === 0',
+  /unverified: readCalls === 0/.test(agentStore),
+)
+check('FindingsReport muestra el aviso i18n', fs.readFileSync(path.join(root, 'src/components/ai/FindingsReport.tsx'), 'utf8').includes('findings.unverified'))
+check('aviso i18n en ES y EN', (i18n.match(/'findings\.unverified'/g) || []).length === 2)
+
 // ============ 5. Secciones clave en archivos restaurados ============
 console.log('== Secciones clave (archivos restaurados) ==')
 const restoredCount = Object.keys(RESTORED_SECTIONS).length

@@ -14,6 +14,9 @@ export interface AgentStep {
   botName?: string
   /** Hallazgos de un subagente de análisis (step type: 'report') */
   findings?: AgentFinding[]
+  /** El subagente terminó SIN leer ningún archivo: el reporte no es fiable
+   *  (0.4.1-B — FindingsReport muestra un aviso en vez del recuento) */
+  unverified?: boolean
 }
 
 /** Hallazgo catalogado por un subagente de análisis (/qa, /security, /audit) */
