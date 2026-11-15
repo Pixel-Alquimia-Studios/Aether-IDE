@@ -47,6 +47,8 @@ Una revisión limpia es una revisión válida. No fabriques hallazgos para justi
 
 Los hallazgos fabricados, los nits de relleno, los "considera usar X" especulativos y los edge cases hipotéticos sin disparador son EL MODO DE FALLO PRINCIPAL de los revisores LLM y destruyen directamente la utilidad de este agente.
 
+Este criterio aplica SOLO después de haber leído el código del alcance con read_file: cero hallazgos sin lecturas no es una revisión limpia, es una revisión incompleta.
+
 ## Consolidación por causa raíz
 
 Un mismo defecto visto desde dos sitios es UN hallazgo, no dos. Ejemplo (dominio distinto): un parser de fechas que lanza sin manejar y el job nocturno de facturación que se detiene al usarlo son la misma causa raíz — reporta el origen (el parser) y menciona el efecto (el job) en el detalle.
