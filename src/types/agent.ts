@@ -17,6 +17,8 @@ export interface AgentStep {
   /** El subagente terminó SIN leer ningún archivo: el reporte no es fiable
    *  (0.4.1-B — FindingsReport muestra un aviso en vez del recuento) */
   unverified?: boolean
+  /** Revisión parcial: leyó N de M archivos de código del alcance (0.4.1-C) */
+  partial?: { read: number; total: number }
 }
 
 /** Hallazgo catalogado por un subagente de análisis (/qa, /security, /audit) */

@@ -38,11 +38,14 @@ export function FindingsReport({
   findings,
   botName,
   unverified,
+  partial,
 }: {
   findings: AgentFinding[]
   botName?: string
   /** El subagente terminó sin leer ningún archivo: el reporte no es fiable */
   unverified?: boolean
+  /** Revisión parcial: leyó N de M archivos de código del alcance */
+  partial?: { read: number; total: number }
 }) {
   const t = useT()
   const counts = SEVERITY_ORDER.map((severity) => ({
@@ -75,6 +78,11 @@ export function FindingsReport({
               {c.count} {SEVERITY_STYLES[c.severity].label}
             </span>
           ))
+        )}
+        {partial && (
+          <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
+            {t('findings.partial').replace('{read}', String(partial.read)).replace('{total}', String(partial.total))}
+          </span>
         )}
       </div>
 

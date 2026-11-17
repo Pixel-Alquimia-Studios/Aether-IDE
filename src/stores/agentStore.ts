@@ -4,8 +4,21 @@ import { chatStop, chatWithTools } from '@/lib/ai/api'
 import { buildContextBlock, getActiveEditorContext, resolveMentions } from '@/lib/ai/context'
 import { AGENT_TOOLS, runTool } from '@/lib/agent/tools'
 import { detectProjectLanguages } from '@/lib/agent/languageDetect'
-import { SUBAGENT_TOOL_NAMES, parseFindings, type SubagentDef } from '@/lib/agent/subagents'
-import { getActiveProviderConfig } from '@/stores/settingsStore'
+import {
+  SUBAGENT_TOOL_NAMES,
+  parseFindings,
+  type SubagentDef,
+} from '@/lib/agent/subagents'
+import {
+  MAX_TOOL_CALLS_SUBAGENT,
+  codeScope,
+  decideCoverage,
+  normalizeForCoverage,
+  trackRepeat,
+  type RepeatState,
+} from '@/lib/agent/subagentCoverage'
+import { resolvePath } from '@/lib/workspace/format'
+import { getActiveProviderConfig, useSettingsStore } from '@/stores/settingsStore'
 import { useChatStore } from '@/stores/chatStore'
 import { useEditorStore } from '@/stores/editorStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
@@ -34,6 +47,12 @@ function makeId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+/** Estimación de tokens de un mensaje/historial (bytes UTF-8 / 4) */
+const estimateTokens = (value: unknown): number => {
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  return Math.round(new TextEncoder().encode(text).length / 4)
 }
 
 // --- Confirmación de acciones destructivas (C1, v0.3.1) ---
@@ -158,6 +177,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
 
     // Turno asociado a este run (para checkpoints y rollback del Time Travel)
     const turn = turnId ?? makeId()
+    const isSubagent = !!subagent
 
     // Modo agente: asegura la sesión de chat (título desde la orden) y
     // registra la tarea como mensaje para que quede en el historial
@@ -184,15 +204,27 @@ export const useAgentStore = create<AgentState>()((set) => ({
       useEditorStore.getState().tabs.map((t) => t.id),
     )
 
-    const systemPrompt = subagent ? subagent.systemPrompt(detectedLanguages) : AGENT_SYSTEM_PROMPT
-    const tools = subagent
-      ? AGENT_TOOLS.filter((t) => SUBAGENT_TOOL_NAMES.has(t.name))
-      : AGENT_TOOLS
+const systemPrompt = subagent ? subagent.systemPrompt(detectedLanguages) : AGENT_SYSTEM_PROMPT
+// 0.4.1-C: design_search SOLO para /ux (qa/security/audit no la necesitan:
+// -391 tok por paso en cada llamada)
+const subagentTools = new Set(
+  subagent && subagent.id !== 'ux'
+    ? [...SUBAGENT_TOOL_NAMES].filter((t) => t !== 'design_search')
+    : [...SUBAGENT_TOOL_NAMES],
+)
+const tools = subagent
+? AGENT_TOOLS.filter((t) => subagentTools.has(t.name))
+: AGENT_TOOLS
 
-    // Los SUBAGENTES (solo lectura) corren SIN límite de pasos; el agente
-    // mutador conserva un tope alto como protección de escrituras
-    const maxSteps = subagent ? Number.POSITIVE_INFINITY : MAX_STEPS
+// Los SUBAGENTES (solo lectura) corren SIN límite de pasos; el agente
+// mutador conserva un tope alto como protección de escrituras
+const maxSteps = subagent ? Number.POSITIVE_INFINITY : MAX_STEPS
 
+    // PENDIENTE (0.4.2/0.5.0): historial de herramientas NATIVO (assistant con
+    // tool_calls + role tool) en los adaptadores — hoy va como texto
+    // ("[Llamaste a la herramienta X.]" + user "Resultado de X:…") porque el
+    // bucle es común a 4 adaptadores con soporte desigual de role:tool en
+    // proveedores locales. Ver análisis 0.4.1-C punto 2.
     const history: Array<{ role: string; content: string }> = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Workspace: ${workspaceRoot}\n\n${userPayload}` },
@@ -203,6 +235,34 @@ export const useAgentStore = create<AgentState>()((set) => ({
       // search_files) — un reporte SIN lecturas no es una revisión fiable
       const READ_COUNTING_TOOLS = new Set(['read_file', 'search_files'])
       let readCalls = 0
+      // --- 0.4.1-C: cobertura de revisión, tope de llamadas y repetición ---
+      // (solo subagentes de análisis; la cobertura NO aplica a /ux)
+      const coverageBot = isSubagent && subagent?.id !== 'ux'
+      let reminders = 0
+      let finishing = false
+      let toolCallsCount = 0
+      let repeatState: RepeatState | null = null
+      const readFiles = new Set<string>()
+      // Alcance de archivos de código calculado UNA vez al iniciar
+      const fileTreePaths: string[] = []
+      const walkTree = (nodes: import('@/types/workspace').FileNode[]): void => {
+        for (const n of nodes) {
+          if (n.kind === 'file') fileTreePaths.push(n.path)
+          if (n.children) walkTree(n.children)
+        }
+      }
+      if (coverageBot) walkTree(useWorkspaceStore.getState().fileTree)
+      const reviewScope = coverageBot ? codeScope(fileTreePaths, workspaceRoot) : []
+      // Límite de contexto del modelo activo (si el catálogo lo expone):
+      // sin recordatorios si el historial estimado supera el 70%
+      const modelContextTokens = useSettingsStore
+        .getState()
+        .fetchedModels[config.providerId]?.find((m: { id: string }) => m.id === config.model)
+        ?.maxContextTokens
+      const hasContextHeadroom = (): boolean => {
+        if (!modelContextTokens) return true
+        return estimateTokens(history) < modelContextTokens * 0.7
+      }
       for (let step = 0; step < maxSteps; step++) {
         // Fase E: el botón Detener corta el bucle en el siguiente paso
         if (useAgentStore.getState().stopRequested) {
@@ -269,6 +329,29 @@ export const useAgentStore = create<AgentState>()((set) => ({
 
           const reportTs = Date.now()
           const findings = subagent ? parseFindings(response.text) : null
+          // 0.4.1-C: COBERTURA — antes de aceptar el final, calcula los
+          // archivos de código del alcance que NO se han leído
+          let partial: { read: number; total: number } | undefined
+          if (coverageBot) {
+            const decision = decideCoverage(
+              reviewScope,
+              readFiles,
+              reminders,
+              hasContextHeadroom(),
+            )
+            if (decision.action === 'remind' && !finishing) {
+              reminders++
+              const hidden = decision.hiddenCount > 0 ? ` y ${decision.hiddenCount} más` : ''
+              history.push({
+                role: 'user',
+                content: `Faltan por revisar: ${decision.shown.join(', ')}${hidden}. Léelos con read_file antes de concluir.`,
+              })
+              continue
+            }
+            if (decision.action === 'accept-partial') {
+              partial = { read: readFiles.size, total: reviewScope.length }
+            }
+          }
           set((state) => ({
             steps: [
               ...state.steps,
@@ -288,6 +371,7 @@ export const useAgentStore = create<AgentState>()((set) => ({
                       type: 'report' as const,
                       findings: findings ?? [],
                       unverified: readCalls === 0,
+                      partial,
                       turnId: turn,
                       ts: reportTs + 1,
                       botName: subagent?.botName,
@@ -319,7 +403,11 @@ export const useAgentStore = create<AgentState>()((set) => ({
           role: 'assistant',
           content:
             response.message ||
-            `[Llamaste a la herramienta ${response.calls.map((c) => c.name).join(', ')}. El resultado llegará en el siguiente mensaje.]`,
+            // Subagentes: anotación MÍNIMA (la promesa del "siguiente mensaje"
+            // era la que los modelos pequeños copiaban como contenido)
+            (isSubagent
+              ? `[Llamaste a la herramienta ${response.calls.map((c) => c.name).join(', ')}.]`
+              : `[Llamaste a la herramienta ${response.calls.map((c) => c.name).join(', ')}. El resultado llegará en el siguiente mensaje.]`),
         })
 
         for (const call of response.calls) {
@@ -337,7 +425,79 @@ export const useAgentStore = create<AgentState>()((set) => ({
               },
             ],
           }))
+          // 0.4.1-C: tope de llamadas + detección de repetición (subagentes)
+          if (isSubagent) {
+            toolCallsCount++
+            if (!finishing && toolCallsCount > MAX_TOOL_CALLS_SUBAGENT) {
+              finishing = true
+              history.push({
+                role: 'user',
+                content: `Has alcanzado el máximo de ${MAX_TOOL_CALLS_SUBAGENT} llamadas a herramientas. Emite tu reporte final con lo leído hasta ahora.`,
+              })
+              continue
+            }
+            if (finishing) {
+              // Tras pedir el reporte final, otra llamada a herramientas cierra ya
+              const partial =
+                coverageBot && readFiles.size < reviewScope.length
+                  ? { read: readFiles.size, total: reviewScope.length }
+                  : undefined
+              set((state) => ({
+                steps: [
+                  ...state.steps,
+                  {
+                    type: 'text',
+                    role: 'assistant',
+                    content:
+                      '⏹ Cerrado: el modelo siguió llamando a herramientas tras pedirle el reporte final.',
+                    turnId: turn,
+                    ts: Date.now(),
+                    botName: subagent?.botName,
+                  },
+                  ...(subagent
+                    ? [
+                        {
+                          type: 'report' as const,
+                          findings: [],
+                          unverified: readCalls === 0,
+                          partial,
+                          turnId: turn,
+                          ts: Date.now() + 1,
+                          botName: subagent?.botName,
+                        },
+                      ]
+                    : []),
+                ],
+              }))
+              void useChatStore.getState().persistActive()
+              return
+            }
+            const rep = trackRepeat(repeatState, call.name, call.arguments)
+            repeatState = rep.state
+            if (rep.warn) {
+              history.push({
+                role: 'user',
+                content: `Ya has llamado a ${call.name} con los mismos argumentos 3 veces. Cambia de enfoque o emite tu reporte final.`,
+              })
+              continue
+            }
+            if (rep.stop) {
+              finishing = true
+              history.push({
+                role: 'user',
+                content:
+                  'Has repetido la misma llamada 4 veces. Emite tu reporte final con lo leído hasta ahora.',
+              })
+              continue
+            }
+          }
+
           // M3: los subagentes de análisis son de solo lectura — hard-deny
+          // La lectura que FALLA cuenta como intentada (registro previo)
+          if (subagent && call.name === 'read_file') {
+            const argPath = (call.arguments as { path?: string } | undefined)?.path ?? ''
+            readFiles.add(normalizeForCoverage(resolvePath(String(argPath), workspaceRoot), workspaceRoot))
+          }
           const output = await runTool(call, workspaceRoot, turn, !!subagent)
           if (subagent && READ_COUNTING_TOOLS.has(call.name)) readCalls++
           // Persist inmediato: los writes aprobados sobreviven a un reload
@@ -352,7 +512,9 @@ export const useAgentStore = create<AgentState>()((set) => ({
           })
           history.push({
             role: 'user',
-            content: `Resultado de ${call.name}:\n${output}\n\nContinúa con la tarea o, si ya terminaste, responde al usuario con un resumen.`,
+            content: isSubagent
+              ? `Resultado de ${call.name}:\n${output}\n\nContinúa la revisión: aún pueden quedar archivos por leer. Cuando hayas leído el código del alcance, emite el reporte final.`
+              : `Resultado de ${call.name}:\n${output}\n\nContinúa con la tarea o, si ya terminaste, responde al usuario con un resumen.`,
           })
         }
       }

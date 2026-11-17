@@ -279,6 +279,37 @@ check(
 check('FindingsReport muestra el aviso i18n', fs.readFileSync(path.join(root, 'src/components/ai/FindingsReport.tsx'), 'utf8').includes('findings.unverified'))
 check('aviso i18n en ES y EN', (i18n.match(/'findings\.unverified'/g) || []).length === 2)
 
+// ============ 4c. Cobertura y textos de bucle (0.4.1-C) ============
+console.log('== Cobertura y mensajes de bucle (0.4.1-C) ==')
+const agentStoreSrc = fs.readFileSync(path.join(root, 'src/stores/agentStore.ts'), 'utf8')
+// Texto de resultado para subagentes: empuja a seguir, no a cerrar
+check(
+  'resultado subagente empuja a continuar la revisión',
+  agentStoreSrc.includes('Continúa la revisión: aún pueden quedar archivos por leer. Cuando hayas leído el código del alcance, emite el reporte final.'),
+)
+check(
+  'Modo Agente conserva su texto de resultado',
+  agentStoreSrc.includes('Continúa con la tarea o, si ya terminaste, responde al usuario con un resumen.'),
+)
+check(
+  'anotación de assistant MÍNIMA para subagentes',
+  agentStoreSrc.includes("[Llamaste a la herramienta ${response.calls.map((c) => c.name).join(', ')}.]"),
+)
+// Historial nativo pendiente, anotado junto al bucle
+check(
+  'historial nativo anotado como pendiente 0.4.2/0.5.0',
+  /PENDIENTE \(0\.4\.2\/0\.5\.0\): historial de herramientas NATIVO/.test(agentStoreSrc),
+)
+// Tope de llamadas y repetición
+check('tope de 60 llamadas a herramientas', agentStoreSrc.includes('MAX_TOOL_CALLS_SUBAGENT'))
+check('aviso por repetición de llamada', agentStoreSrc.includes('con los mismos argumentos 3 veces'))
+check('cierre por repetición', agentStoreSrc.includes('Has repetido la misma llamada 4 veces'))
+// design_search solo /ux
+check(
+  'design_search excluida de qa/security/audit',
+  /subagent\.id !== 'ux'/.test(agentStoreSrc),
+)
+
 // ============ 5. Secciones clave en archivos restaurados ============
 console.log('== Secciones clave (archivos restaurados) ==')
 const restoredCount = Object.keys(RESTORED_SECTIONS).length

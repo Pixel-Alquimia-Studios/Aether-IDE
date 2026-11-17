@@ -582,7 +582,7 @@ const openSettings = useUiStore((s) => s.openSettings)
                 </div>
               )
             } else if (step.type === 'report' && step.findings) {
-              content = <FindingsReport findings={step.findings} botName={step.botName} unverified={step.unverified} />
+              content = <FindingsReport findings={step.findings} botName={step.botName} unverified={step.unverified} partial={step.partial} />
             } else {
               content = (
                 <div className="rounded-lg border border-aether-border/60 bg-aether-surface px-3 py-2 text-[13px] text-aether-text">
