@@ -36,7 +36,7 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 - **Inline completions** (ghost text) aceptables con Tab, con debounce inteligente
 - **Edit with prompt** (`Ctrl+I`): diff editor inline sobre la selección con Aceptar/Rechazar
 - Métricas por respuesta con **tokens reales** (y cacheados si el proveedor los reporta): `⚡ 1.4s · 320 tokens · 💰 80 cacheados`
-- **API keys blindadas**: guardadas en el **keychain del SO** (nunca en archivos planos), **validadas contra el proveedor** al guardar (con botón *Reintentar*), badge con estado (configurada · …abcd / comprobando / rechazada / no verificable) y el hint de los últimos 4 caracteres calculado en Rust — la key jamás sale del keychain
+- **API keys**: la key vive en el **keychain del SO** (nunca en archivos planos), se **valida contra el proveedor** al guardar (con botón *Reintentar*), badge con estado (configurada · …abcd / comprobando / rechazada / no verificable) y el hint de los **últimos 4 caracteres** (solo con keys de 12 o más) calculado en Rust — la key completa nunca llega a la interfaz ni se guarda en archivos, logs ni localStorage; solo se envía al proveedor que elijas, por HTTPS
 - **Proveedor personalizado**: URL base OpenAI-compatible validada en Rust (HTTPS para hosts públicos; HTTP solo loopback/LAN/*.local), sin seguir redirecciones y con la key ligada a host:puerto
 - Fetch dinámico de modelos con metadatos (contexto, modalidades y **nombre legible**), **filtro de búsqueda** en catálogos grandes (OpenRouter 300+) y retry con backoff exponencial ante errores transitorios (408/429/5xx/504/529)
 
@@ -175,7 +175,7 @@ Release de **expansión y blindaje**: 5 proveedores nuevos + proveedor personali
 
 **Añadido — Productividad**
 - **Subagente `/ux` (UxBot 🎨)**: revisión de UI/UX con guía de diseño basada en un **motor BM25 en TypeScript** (port del proyecto open-source ui-ux-pro-max, MIT) sobre 7 dominios de conocimiento — mismo menú `/`, mismo formato de hallazgos
-- **Skills por lenguaje**: los subagentes reciben checklists adaptados al stack del proyecto (detección automática por extensiones y archivos raíz de Rust, Go, Python, Java, C#, Node y Web)
+- **Skills por lenguaje**: los subagentes reciben checklists adaptados al stack del proyecto (detección automática por extensiones y archivos raíz) — TypeScript/JavaScript, Rust, Python, Go, Java, Kotlin, C/C++ y Ruby
 - Menú de comandos `/` unificado (QA, Seguridad, Auditoría, UX) con avatares y navegación por teclado
 - **Sugerencias ante 401/403 de Moonshot**: aviso de usar el proveedor personalizado con `https://api.moonshot.cn/v1` si la key es de la plataforma china
 - Chat 401/403 con **mensaje claro + botón "Abrir Ajustes"** que aterriza en la tarjeta del proveedor afectado
@@ -200,11 +200,10 @@ Release de **expansión y blindaje**: 5 proveedores nuevos + proveedor personali
 **Tests**: 56 unitarios de Rust (claves/validación/estados, clasificación HTTP, serialización sin fugas, servidores locales simulados) + 9 suites de Node (permisos 97 checks, paridad i18n, cableado de keys, filtro de modelos 320 entradas, tracker de carreras, seguridad del agente, arranque, duración mínima de carga, bitmaps del instalador) + verificador de CSP en el release
 
 **Limitaciones conocidas** (diferidas)
-- Los checkpoints del Time Travel **no sobreviven a un reinicio** (viven en memoria) — persistencia en SQLite planeada para 0.4.1
-- Archivos UTF-16 no se abren (error visible) — detección de BOM planeada para 0.4.1
-- Sin backpressure en el PTY con salida masiva (el buffer intermedio mitiga la pérdida) — flow-control completo en 0.5.x
-- Los subagentes no reportan tokens reales (el endpoint de tool-calling aún no los expone) — planeado para 0.4.1
-- La aprobación automática de comandos es léxica: un symlink/junction dentro del workspace no se resuelve antes de aprobar (mitigado: la allowlist ya no incluye comandos que leen rutas)
+- Los checkpoints del Time Travel **no sobreviven a un reinicio** (viven en memoria) - persistencia en SQLite planeada para 0.4.x
+- Archivos UTF-16 no se abren (error visible) - detección de BOM planeada para 0.4.x
+- Sin backpressure en el PTY con salida masiva (el buffer intermedio mitiga la pérdida) - flow-control completo en 0.5.x
+- Los subagentes no reportan tokens reales (el endpoint de tool-calling aún no los expone) - planeado para 0.4.x
 
 ### v0.3.1
 
