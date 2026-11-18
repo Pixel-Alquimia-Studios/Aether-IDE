@@ -204,6 +204,7 @@ const en = {
   'findings.unverified':
     'The subagent read no files; this result is not a reliable review.',
   'findings.partial': 'Partial review: read {read} of {total} code files',
+  'findings.reviewed': '{read} of {total} code files reviewed',
   // Tooltips y textos del chat (Lote G: fuera del hardcode)
   'chat.editResendTitle': 'Edit and resend (reverts later changes)',
   'chat.deleteRevertTitle': 'Delete (reverts agent changes from here)',
@@ -455,6 +456,7 @@ const es: Record<TranslationKey, string> = {
   'findings.unverified':
     'El subagente no leyó ningún archivo; este resultado no es una revisión fiable.',
   'findings.partial': 'Revisión parcial: {read} de {total} archivos de código leídos',
+  'findings.reviewed': '{read} de {total} archivos de código revisados',
   // Tooltips y textos del chat (Lote G: fuera del hardcode)
   'chat.editResendTitle': 'Editar y reenviar (revierte los cambios posteriores)',
   'chat.deleteRevertTitle': 'Eliminar (revierte los cambios del agente desde aquí)',

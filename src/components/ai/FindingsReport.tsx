@@ -79,9 +79,15 @@ export function FindingsReport({
             </span>
           ))
         )}
-        {partial && (
+        {/* Parcial solo si leyó MENOS del total; completo → línea neutra */}
+        {partial && partial.read < partial.total && (
           <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
             {t('findings.partial').replace('{read}', String(partial.read)).replace('{total}', String(partial.total))}
+          </span>
+        )}
+        {partial && partial.read >= partial.total && (
+          <span className="rounded-full border border-aether-border bg-aether-bg px-2 py-0.5 text-[10px] font-medium text-aether-text-dim">
+            {t('findings.reviewed').replace('{read}', String(partial.read)).replace('{total}', String(partial.total))}
           </span>
         )}
       </div>
