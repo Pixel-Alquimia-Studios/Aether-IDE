@@ -36,7 +36,7 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 - **Inline completions** (ghost text) aceptables con Tab, con debounce inteligente
 - **Edit with prompt** (`Ctrl+I`): diff editor inline sobre la selección con Aceptar/Rechazar
 - Métricas por respuesta con **tokens reales** (y cacheados si el proveedor los reporta): `⚡ 1.4s · 320 tokens · 💰 80 cacheados`
-- **API keys**: la key vive en el **keychain del SO** (nunca en archivos planos), se **valida contra el proveedor** al guardar (con botón *Reintentar*), badge con estado (configurada · …abcd / comprobando / rechazada / no verificable) y el hint de los **últimos 4 caracteres** (solo con keys de 12 o más) calculado en Rust — la key completa nunca llega a la interfaz ni se guarda en archivos, logs ni localStorage; solo se envía al proveedor que elijas, por HTTPS
+- **API keys**: la key vive en el **keychain del SO** (nunca en archivos planos), se **valida contra el proveedor** al guardar (con botón *Reintentar*), badge con estado (configurada · …abcd / comprobando / rechazada / no verificable) y el hint de los **últimos 4 caracteres** (solo con keys de 12 o más) calculado en Rust — la key completa nunca llega a la interfaz ni se guarda en archivos, logs ni localStorage; solo se envía al proveedor que elijas, por HTTPS (el proveedor personalizado permite HTTP solo en localhost y redes locales)
 - **Proveedor personalizado**: URL base OpenAI-compatible validada en Rust (HTTPS para hosts públicos; HTTP solo loopback/LAN/*.local), sin seguir redirecciones y con la key ligada a host:puerto
 - Fetch dinámico de modelos con metadatos (contexto, modalidades y **nombre legible**), **filtro de búsqueda** en catálogos grandes (OpenRouter 300+) y retry con backoff exponencial ante errores transitorios (408/429/5xx/504/529)
 
@@ -152,6 +152,40 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 > ℹ️ El ejecutable **portable** de esta versión no está disponible — los portables existen a partir de **v0.1.2**.
 
 ## 📋 Changelog
+
+### v0.4.1
+
+Release de calidad: los subagentes de análisis recuperan el conocimiento que se había recortado en la adaptación, citan las líneas correctas y no se cuelan revisiones vacías.
+
+**Mejorado: subagentes (BugBot, SecBot, AuditBot, UxBot)**
+- Prompts y checklists restaurados: proceso de revisión de 5 pasos, filtro previo al reporte, evidencia obligatoria en HIGH/CRITICAL, consolidación por causa raíz y "cero hallazgos es válido" solo tras haber leído el código.
+- Skills ampliadas: `qa-checklist`, `security-checklist` (OWASP completo), `ux-checklist` (+4 prioridades), `typescript-patterns` y `rust-patterns` (concurrencia, errores, rendimiento).
+- Los skills mantienen la regla de fuente única: el prompt define el proceso y las skills contienen las checklists.
+- Números de línea reales: los subagentes reciben los archivos numerados, y los hallazgos apuntan a la línea correcta (antes fallaban casi siempre).
+- Cobertura de la revisión: si el subagente intenta concluir sin haber leído los archivos de código del alcance (hasta 30), se le recuerda cuáles faltan (máx. 2 recordatorios). La tarjeta indica "N de M archivos de código revisados" o "revisión parcial" si no leyó todo; si no leyó ninguno, avisa en vez de mostrar "0 hallazgos".
+- Tope de 60 llamadas a herramientas y cierre automático si repite la misma llamada (3.ª vez avisa, 4.ª cierra) con reporte parcial de lo leído.
+- `design_search` solo se ofrece a `/ux` (menos tokens en cada paso de `/qa`, `/security` y `/audit`).
+
+**Mejorado: rutas**
+- La interfaz y el contexto del modelo ya no muestran el prefijo `\\?\`.
+- `list_directory` acepta `.` o vacío como raíz del workspace, y los errores de ruta explican que son relativas a la raíz.
+
+**Mejorado: arranque**
+- Pantalla de carga con duración mínima de 1 segundo que cubre la ventana (sin clics ni atajos mientras dura) y respeta `prefers-reduced-motion`.
+
+**Corregido**
+- El editor del build instalado no tenía colores de sintaxis: la CSP anulaba los estilos que Monaco inyecta en runtime (corregido con `dangerousDisableAssetCspModification` solo en `style-src`).
+- Las imágenes del instalador MSI eran ilegibles (texto negro sobre fondo oscuro): el arte de marca vive solo en la columna izquierda y el texto del asistente queda sobre blanco.
+
+**Interno**
+- Pruebas de contenido de skills (presupuesto con aviso a 6.000 y fallo a 8.000 tokens, atribución, términos prohibidos, anti-sobreajuste) y proyecto de ejemplo para evaluar a los subagentes.
+- `verify:release` valida la CSP del build.
+
+**Limitaciones conocidas (diferidas a 0.4.x)**
+- Con modelos locales de contexto corto, el prompt de un subagente puede ocupar buena parte del contexto: sube `num_ctx` en Ollama (16K o más).
+- El historial de herramientas de los subagentes se envía como texto (no como mensajes nativos): los modelos pequeños pueden confundirse — previsto para 0.5.0.
+- Time Travel no sobrevive al reinicio, los archivos UTF-16 no se abren y los subagentes no reportan tokens reales.
+- Sin backpressure en el PTY con salida masiva — flow-control en 0.5.x.
 
 ### v0.4.0
 
