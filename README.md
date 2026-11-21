@@ -64,7 +64,10 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
-| [aether-ide-0.4.0-x64-portable.exe](downloads/0.4.0/aether-ide-0.4.0-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 12,04 MB |
+| [aether-ide-0.4.1-x64-portable.exe](downloads/0.4.1/aether-ide-0.4.1-x64-portable.exe) | **Portable** - ejecutable suelto, sin instalaci�n (Windows x64) | 12,06 MB |
+| [aether-ide-0.4.1-x64-setup.exe](downloads/0.4.1/aether-ide-0.4.1-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,82 MB |
+| [aether-ide-0.4.1-x64.msi](downloads/0.4.1/aether-ide-0.4.1-x64.msi) | Instalador MSI (Windows x64) | 7,31 MB |
+| [aether-ide-0.4.0-x64-portable.exe](downloads/0.4.0/aether-ide-0.4.0-x64-portable.exe) | **Portable** - ejecutable suelto, sin instalaci�n (Windows x64) | 12,04 MB |
 | [aether-ide-0.4.0-x64-setup.exe](downloads/0.4.0/aether-ide-0.4.0-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,81 MB |
 | [aether-ide-0.4.0-x64.msi](downloads/0.4.0/aether-ide-0.4.0-x64.msi) | Instalador MSI (Windows x64) | 7,30 MB |
 
@@ -419,3 +422,6 @@ Aether IDE/
 **Pixel Alquimia Studios** — construido con Tauri v2
 
 </div>
+
+
+
