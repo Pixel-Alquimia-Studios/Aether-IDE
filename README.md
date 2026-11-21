@@ -58,16 +58,25 @@ Aether IDE es un editor de código nativo (Windows, estilo VS Code) con un **gat
 
 > Los instaladores son *self-contained* (no requieren instalación previa de nada) e incluyen toda la app empaquetada localmente.
 
-### v0.4.0 *(actual)*
+### v0.4.1 *(actual)*
 
 > 🚀 Los releases se publican automáticamente con GitHub Actions ([GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest)) y se espejan en `downloads/` del repo por si acaso.
 
 | Archivo | Tipo | Tamaño |
 |---|---|---|
-| [aether-ide-0.4.1-x64-portable.exe](downloads/0.4.1/aether-ide-0.4.1-x64-portable.exe) | **Portable** - ejecutable suelto, sin instalaci�n (Windows x64) | 12,06 MB |
+| [aether-ide-0.4.1-x64-portable.exe](downloads/0.4.1/aether-ide-0.4.1-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 12,06 MB |
 | [aether-ide-0.4.1-x64-setup.exe](downloads/0.4.1/aether-ide-0.4.1-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,82 MB |
 | [aether-ide-0.4.1-x64.msi](downloads/0.4.1/aether-ide-0.4.1-x64.msi) | Instalador MSI (Windows x64) | 7,31 MB |
-| [aether-ide-0.4.0-x64-portable.exe](downloads/0.4.0/aether-ide-0.4.0-x64-portable.exe) | **Portable** - ejecutable suelto, sin instalaci�n (Windows x64) | 12,04 MB |
+
+> ⬆ Los usuarios de v0.3.0+ reciben esta actualización automáticamente (botón **⬆ Actualizar**).
+
+### v0.4.0
+
+> 🚀 Los releases se publican automáticamente con GitHub Actions ([GitHub Releases](https://github.com/Pixel-Alquimia-Studios/Aether-IDE/releases/latest)) y se espejan en `downloads/` del repo por si acaso.
+
+| Archivo | Tipo | Tamaño |
+|---|---|---|
+| [aether-ide-0.4.0-x64-portable.exe](downloads/0.4.0/aether-ide-0.4.0-x64-portable.exe) | **Portable** — ejecutable suelto, sin instalación (Windows x64) | 12,04 MB |
 | [aether-ide-0.4.0-x64-setup.exe](downloads/0.4.0/aether-ide-0.4.0-x64-setup.exe) | Instalador NSIS (Windows x64) | 5,81 MB |
 | [aether-ide-0.4.0-x64.msi](downloads/0.4.0/aether-ide-0.4.0-x64.msi) | Instalador MSI (Windows x64) | 7,30 MB |
 
@@ -175,6 +184,8 @@ Release de calidad: los subagentes de análisis recuperan el conocimiento que se
 
 - Sin backpressure en el PTY con salida masiva — flow-control en 0.5.x.
 
+
+### v0.4.0
 
 Release de **expansión y blindaje**: 5 proveedores nuevos + proveedor personalizado, validación de API keys, permisos del agente endurecidos, subagente de UX, identidad de marca y arranque sin flash blanco.
 
@@ -422,6 +433,3 @@ Aether IDE/
 **Pixel Alquimia Studios** — construido con Tauri v2
 
 </div>
-
-
-
